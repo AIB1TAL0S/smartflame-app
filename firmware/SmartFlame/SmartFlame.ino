@@ -35,10 +35,10 @@ char pass[] = "YOUR_WIFI_PASSWORD";
 
 // ---------------- Pins ----------------
 #define PIN_MQ2_AOUT    34   // MQ-2 AO via divider (input-only ADC1)
-#define PIN_DHT         26   // DHT11 DATA
+#define PIN_DHT         33   // DHT11 DATA (matches your wiring photo)
 #define PIN_I2C_SDA     21   // LCD SDA
 #define PIN_I2C_SCL     22   // LCD SCL
-#define PIN_BUZZER      25   // Buzzer + via 100 ohm
+#define PIN_BUZZER      25   // buzzer + direct (no transistor), - to GND
 #define PIN_FLAME_DO    27   // Flame sensor DO
 
 // ---------------- Flame ----------------
