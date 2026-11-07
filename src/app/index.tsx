@@ -49,7 +49,7 @@ export default function Dashboard() {
   const setAlarm = async (v: 0 | 1) => {
     if (!settings.token) return;
     patchSettings({});
-    await fetch(updateUrl(settings.region, settings.token, "V4", v)).catch(() => undefined);
+    await fetch(updateUrl(settings.region, settings.token, "V5", v)).catch(() => undefined);
   };
 
   // sparkline: normalize gas history into a tiny bar strip

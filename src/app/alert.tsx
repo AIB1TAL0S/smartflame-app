@@ -23,7 +23,7 @@ export default function AlertScreen() {
 
   const mute = async () => {
     if (!settings.token) return;
-    await fetch(updateUrl(settings.region, settings.token, "V4", 0)).catch(() => undefined);
+    await fetch(updateUrl(settings.region, settings.token, "V5", 0)).catch(() => undefined);
   };
 
   const clear = data?.flame !== 1;

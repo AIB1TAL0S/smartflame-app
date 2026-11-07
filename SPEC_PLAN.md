@@ -38,7 +38,7 @@
     ],
     "polling": {
       "endpoint": "https://{region}/external/api/getAll?token={deviceToken}",
-      "interval": "3000ms (configurable 1–30s)",
+      "interval": "3000ms (configurable 1-30s)",
       "also": "https://{region}/external/api/isHardwareConnected?token={deviceToken} → Online/Offline pill",
       "writeEndpoint": "https://{region}/external/api/update?token={deviceToken}&V4={0|1} for alarm mute",
       "backoff": "on fetch failure double interval up to 30s, reset on success"

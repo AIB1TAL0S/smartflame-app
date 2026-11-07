@@ -1,56 +1,41 @@
-# Welcome to your Expo app 👋
+# SmartFlame — IoT Fire Detection & Mobile Emergency Response
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+ESP32 + MQ2 + flame sensor + DHT11 + buzzer + LCD → Blynk Cloud → Expo mobile app with push alerts.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+Sensors → ESP32 (Arduino, Blynk lib) → Blynk Cloud ── webhook → Expo Push → 📱
+                                            │
+                                            └── HTTPS getAll ← poll 3s ← 📱 app
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## Repo layout
+- `SPEC_PLAN.md` — full design: datastreams, webhook payload, acceptance criteria
+- `src/app/` — expo-router screens: `index` (dashboard), `alert` (siren), `settings` (token, region, poll, test push)
+- `src/lib/` — `blynk.ts` (external API URLs + getAll parsing), `useBlynkPoll.ts` (3s poll + backoff), `store.ts` (zustand), `notifications.ts` (channel + token), `persist.ts` (SecureStore)
+- `scripts/fake-device.sh` — simulates ESP32 writes; `--fire` flag triggers alert path
 
-### Other setup steps
+## Blynk datastreams
+| Pin | Name | Type | Meaning |
+|---|---|---|---|
+| V1 | gas | Integer | MQ2 ppm (0–4095) |
+| V2 | flame | Integer | 0/1 flame detected |
+| V3 | temp | Double | DHT11 °C |
+| V4 | hum | Double | DHT11 % |
+| V5 | alarm | Integer | buzzer 0/1 — writable from app (mute) |
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Run
+```bash
+npm install
+npx expo start          # scan QR with Expo Go
+```
 
-## Learn more
+## Simulate device (no hardware needed)
+```bash
+TOKEN=<device token> ./scripts/fake-device.sh          # normal readings
+TOKEN=<device token> ./scripts/fake-device.sh --fire   # fire event → push alert
+```
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Firmware side (ESP32)
+Use Blynk library with template `SmartFlame`, device token from Blynk Console.
+Write sensors to V1-V5 (on change + 5s heartbeat), buzzer state to V5,
+and react to V4 writes (app mute) via `BLYNK_WRITE(V5)`.

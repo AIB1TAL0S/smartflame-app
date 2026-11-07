@@ -9,17 +9,20 @@ export function parseGetAll(json: Record<string, string>): Datastreams {
     return Number.isFinite(n) ? n : dflt;
   };
   return {
-    gas: num("V0"),
-    flame: num("V1"),
-    temp: num("V2"),
-    hum: num("V3"),
-    alarm: num("V4"),
+    gas: num("v1"),
+    flame: num("v2"),
+    temp: num("v3"),
+    hum: num("v4"),
+    alarm: num("v5"),
   };
 }
 
 export function regionHost(region: string): string {
   return region === "blynk.cloud" ? "blynk.cloud" : `${region}.blynk.cloud`;
 }
+
+// Keep default "blynk.cloud" — fetch follows the 308 to the regional host
+// (e.g. ny3.blynk.cloud) automatically on every request.
 
 export function getAllUrl(region: string, token: string): string {
   return `https://${regionHost(region)}/external/api/getAll?token=${encodeURIComponent(token)}`;
