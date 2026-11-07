@@ -43,7 +43,6 @@ export default function Dashboard() {
   const patchSettings = useStore((s) => s.patchSettings);
 
   const fire = data?.flame === 1;
-  const gasPct = data ? Math.min(100, (data.gas / 4095) * 100) : 0;
   const status = fire ? "FIRE" : connected === false ? "OFFLINE" : connected ? "ONLINE" : "…";
 
   const setAlarm = async (v: 0 | 1) => {
@@ -72,7 +71,7 @@ export default function Dashboard() {
       ) : null}
 
       <View style={styles.grid}>
-        <Card title="Gas (MQ2)" value={data ? String(data.gas) : "—"} unit="ppm" color={gasPct > 60 ? COLORS.warn : COLORS.text} />
+        <Card title="Gas (MQ2)" value={data ? String(data.gas) : "—"} unit="%" color={data && data.gas > 60 ? COLORS.warn : COLORS.text} />
         <Card title="Flame" value={data ? (data.flame ? "DETECTED" : "clear") : "—"} color={fire ? COLORS.fire : COLORS.ok} />
         <Card title="Temperature" value={data ? data.temp.toFixed(1) : "—"} unit="°C" />
         <Card title="Humidity" value={data ? data.hum.toFixed(0) : "—"} unit="%" />

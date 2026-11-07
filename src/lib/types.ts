@@ -1,8 +1,8 @@
 export type Datastreams = {
-  gas: number; // V1 ppm (MQ2 raw 0-4095)
+  gas: number; // V1 percent 0-100 (MQ2 normalized by firmware)
   flame: number; // V2 0/1
   temp: number; // V3 °C
-  hum: number; // V4 % (pin v4)
+  hum: number; // V4 %
   alarm: number; // V5 0/1 buzzer state
 };
 

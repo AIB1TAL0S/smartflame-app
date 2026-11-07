@@ -8,9 +8,9 @@ FIRE="${1:-}"
 IS_FIRE=false
 [ "$FIRE" = "--fire" ] && IS_FIRE=true
 if $IS_FIRE; then
-  GAS=$((3800 + RANDOM % 300)); FLAME=1; ALARM=1
+  GAS=$((80 + RANDOM % 20)); FLAME=1; ALARM=1
 else
-  GAS=$((200 + RANDOM % 400)); FLAME=0; ALARM=0
+  GAS=$((5 + RANDOM % 20)); FLAME=0; ALARM=0
 fi
 TEMP=$(python3 -c "import random;print(round(random.uniform(24,32),1))")
 HUM=$(python3 -c "import random;print(round(random.uniform(40,70),0))")
