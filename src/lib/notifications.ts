@@ -28,9 +28,9 @@ export async function initNotifications(): Promise<string | null> {
   });
   if (!settings.granted) return null;
 
-  const tokenRes = await Notifications.getExpoPushTokenAsync();
-  // In Expo Go this resolves from the experience automatically; after `eas build`,
-  // the projectId from app.json extra.eas.projectId is used.
+  const tokenRes = await Notifications.getExpoPushTokenAsync({
+    projectId: "93a7320a-041a-48ee-a87a-5dc942136a9c", // @hunhow/smartflame-app
+  });
   const token = tokenRes.data;
   useStore.getState().setPushToken(token);
   return token;
