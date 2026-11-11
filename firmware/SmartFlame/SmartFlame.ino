@@ -660,6 +660,8 @@ setInterval(refreshData, 1000);
 // WEB SERVER ROUTES
 // ============================================================
 void handleRoot() {
+// CORS: allow the Expo web app to fetch any page
+server.sendHeader("Access-Control-Allow-Origin", "*");
 server.send_P(
 200,
 "text/html",
@@ -696,6 +698,8 @@ levelToString(stableLevel),
 WiFi.status() == WL_CONNECTED ? "true" : "false",
 wifiMode
 );
+// CORS: allow the Expo web app (localhost or LAN IP) to read this API
+server.sendHeader("Access-Control-Allow-Origin", "*");
 server.send(
 200,
 "application/json",
