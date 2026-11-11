@@ -3,7 +3,7 @@ import { useStore } from "./store";
 import { parseStatus } from "./types";
 
 const POLL_MS = 1000; // HTTP fallback poll
-const MAX_BACKOFF = 8;
+const MAX_BACKOFF = 5; // ×POLL_MS = 5s worst case, stays under STALE_MS (6s) so a lossy WiFi never flaps OFFLINE
 const WS_PORT = 81; // firmware WebSocketsServer port
 const WS_RETRY_MS = 3000;
 

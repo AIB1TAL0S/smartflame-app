@@ -179,7 +179,7 @@ const DEVICE_ALERT_MAP: Record<DeviceAlertLevel, AlertLevel> = {
 };
 
 /** No valid snapshot for this long ⇒ device considered offline. */
-const STALE_MS = 4000;
+const STALE_MS = 6000; // tolerate 2-3 dropped polls over lossy WiFi before flagging offline
 const WATCHDOG_TICK_MS = 1000;
 
 export function useEspSensorFeed(): void {
@@ -212,12 +212,14 @@ export function useEspSensorFeed(): void {
         },
       });
     });
-    // Watchdog: mark offline while the poller reports an error or snapshots
-    // have stopped arriving (e.g. device unplugged mid-stream).
+    // Watchdog: mark offline only when snapshots have REALLY stopped —
+    // no fresh data for STALE_MS. A transient error alone (single dropped
+    // poll on lossy WiFi) must not flap the dashboard: fresh data always
+    // wins and clears the error inside the store.
     const watch = setInterval(() => {
       const st = useStore.getState();
       const stale = !st.lastUpdate || Date.now() - st.lastUpdate > STALE_MS;
-      if (stale || st.error) useSensorSource.getState().markOffline();
+      if (stale) useSensorSource.getState().markOffline();
     }, WATCHDOG_TICK_MS);
     return () => {
       unsub();
