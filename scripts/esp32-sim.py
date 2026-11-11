@@ -18,6 +18,7 @@ def status_payload():
         "mq2Raw": gas * 30, "gasPercent": gas,
         "temperatureC": random.randint(28, 33), "humidity": random.randint(40, 60),
         "dhtValid": True, "flame": FIRE,
+        "buzzer": FIRE,
         "alert": "EMERGENCY" if FIRE else "NORMAL",
         "routerConnected": True, "wifiMode": "ROUTER",
     }

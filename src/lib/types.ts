@@ -7,6 +7,8 @@ export type DeviceStatus = {
   humidity: number;
   dhtValid: boolean;
   flame: boolean;
+  /** Real buzzer GPIO state (newer firmware). Undefined on older firmware. */
+  buzzer?: boolean;
   alert: AlertLevel;
   routerConnected: boolean;
   wifiMode: "ROUTER" | "ACCESS_POINT" | "CONNECTING";
@@ -22,6 +24,7 @@ export function parseStatus(json: Record<string, unknown>): DeviceStatus {
     humidity: num("humidity"),
     dhtValid: json.dhtValid === true,
     flame: json.flame === true,
+    buzzer: typeof json.buzzer === "boolean" ? json.buzzer : undefined,
     alert: ((json.alert as string) ?? "UNKNOWN") as AlertLevel,
     routerConnected: json.routerConnected === true,
     wifiMode: ((json.wifiMode as string) ?? "CONNECTING") as DeviceStatus["wifiMode"],

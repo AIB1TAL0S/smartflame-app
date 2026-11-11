@@ -65,6 +65,8 @@ const char* AP_PASSWORD = "flame1234";
 // ============================================================
 #define GAS_SAMPLE_INTERVAL_MS 200
 #define DHT_SAMPLE_INTERVAL_MS 2000
+/** Consecutive failed DHT reads before dhtValid is dropped. */
+#define DHT_FAIL_LIMIT 3
 #define DECISION_INTERVAL_MS 200
 #define LCD_UPDATE_INTERVAL_MS 500
 #define SERIAL_LOG_INTERVAL_MS 1000
@@ -108,10 +110,13 @@ AlertLevel stableLevel = ALERT_NORMAL;
 AlertLevel candidateLevel = ALERT_NORMAL;
 uint8_t candidateCount = 0;
 unsigned long alarmTestUntilMs = 0;
+/** True while the buzzer is physically driven (tone playing right now). */
+bool buzzerActive = false;
 bool flameCandidate = false;
 unsigned long flameChangeMs = 0;
 unsigned long lastGasMs = 0;
 unsigned long lastDhtMs = 0;
+uint8_t dhtFailStreak = 0;
 unsigned long lastFlameMs = 0;
 unsigned long lastDecisionMs = 0;
 unsigned long lastLcdMs = 0;
@@ -119,6 +124,7 @@ unsigned long lastLogMs = 0;
 bool apActive = false;
 bool wifiAttemptInProgress = false;
 unsigned long wifiAttemptStartedMs = 0;
+bool wasWifiConnected = false; // tracks router link for offline diagnostics
 unsigned long lastWifiRetryMs = 0;
 unsigned long lastPushMs = 0;
 // ============================================================
@@ -223,8 +229,13 @@ if (!isnan(temperature) && !isnan(humidity)) {
 sensorData.temperatureC = (int)lroundf(temperature);
 sensorData.humidity = (int)lroundf(humidity);
 sensorData.dhtValid = true;
+dhtFailStreak = 0;
 } else {
-sensorData.dhtValid = false;
+// Hold last-good values and only invalidate after DHT_FAIL_LIMIT
+// consecutive failed reads, so a single DHT hiccup (common on DHT11)
+// doesn't flag the sensor offline in the app.
+if (dhtFailStreak < 255) dhtFailStreak++;
+if (dhtFailStreak >= DHT_FAIL_LIMIT) sensorData.dhtValid = false;
 Serial.println("[DHT] Read failed.");
 }
 }
@@ -315,17 +326,16 @@ levelToString(stableLevel)
 // BUZZER ALERT PATTERN
 // ============================================================
 void updateBuzzer(unsigned long now) {
-static bool buzzerOn = false;
 static AlertLevel previousLevel = ALERT_NORMAL;
 if (stableLevel != previousLevel) {
 previousLevel = stableLevel;
 buzzerOff();
-buzzerOn = false;
+buzzerActive = false;
 }
 if (stableLevel == ALERT_NORMAL) {
-if (buzzerOn) {
+if (buzzerActive) {
 buzzerOff();
-buzzerOn = false;
+buzzerActive = false;
 }
 return;
 }
@@ -340,9 +350,9 @@ shouldBeOn =
 (now % EMERGENCY_CYCLE_MS) < EMERGENCY_BEEP_MS;
 frequency = EMERGENCY_FREQ_HZ;
 }
-if (shouldBeOn != buzzerOn) {
-buzzerOn = shouldBeOn;
-if (buzzerOn)
+if (shouldBeOn != buzzerActive) {
+buzzerActive = shouldBeOn;
+if (buzzerActive)
 buzzerTone(frequency);
 else
 buzzerOff();
@@ -457,8 +467,33 @@ Serial.printf(
 WIFI_SSID
 );
 }
+// ============================================================
+// WIFI EVENTS (disconnect diagnostics)
+// ============================================================
+/**
+ * Logs every router disconnect with the exact reason so "why did the
+ * ESP32 go offline" is answered in one line on the serial monitor.
+ * Common reasons: NO_AP_FOUND (SSID not visible), AUTH_EXPIRE /
+ * AUTH_FAIL (wrong password or router kicked us), BEACON_TIMEOUT
+ * (weak signal / router drop), CONNECTION_FAIL (router busy).
+ */
+void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+    int reason = info.wifi_sta_disconnected.reason;
+    Serial.printf(
+      "[WIFI] Router disconnected — reason: %s (code %d), rssi=%d dBm\n",
+      WiFi.disconnectReasonName((wifi_err_reason_t)reason),
+      reason,
+      WiFi.RSSI()
+    );
+  } else if (event == ARDUINO_EVENT_WIFI_STA_LOST_IP) {
+    Serial.println("[WIFI] Lost IP address (DHCP lease dropped).");
+  }
+}
+
 void setupWiFi() {
 WiFi.persistent(false);
+  WiFi.onEvent(onWifiEvent); // disconnect reason diagnostics
 WiFi.setSleep(false);
 // Start hotspot immediately.
 startFallbackAP();
@@ -468,8 +503,23 @@ beginRouterConnection();
 // ============================================================
 // WIFI RECONNECTION
 // ============================================================
-void maintainWiFi(unsigned long now) {
-if (WiFi.status() == WL_CONNECTED) {
+  void maintainWiFi(unsigned long now) {
+bool connected = (WiFi.status() == WL_CONNECTED);
+// Detect the exact moment the router link drops so the serial monitor
+// explains why the board stopped serving data.
+if (wasWifiConnected && !connected) {
+Serial.printf(
+"[WIFI] LOST ROUTER CONNECTION - status=%d rssi=%d dBm channel=%d - app falls back to HTTP poll/hotspot\n",
+WiFi.status(),
+WiFi.RSSI(),
+WiFi.channel()
+);
+if (!wifiAttemptInProgress) {
+lastWifiRetryMs = now; // retry promptly after an unexpected drop
+}
+}
+wasWifiConnected = connected;
+if (connected) {
 if (wifiAttemptInProgress) {
 wifiAttemptInProgress = false;
 Serial.println("[WIFI] Router connection successful.");
@@ -674,7 +724,7 @@ DASHBOARD_HTML
 );
 }
 void handleStatus() {
-char json[320];
+char json[352];
 buildStatusJson(json, sizeof(json));
 // CORS: allow the Expo web app (localhost or LAN IP) to read this API
 server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -701,7 +751,7 @@ len,
 "\"temperatureC\":%d,"
 "\"humidity\":%d,"
 "\"dhtValid\":%s,"
-"\"flame\":%s,"
+"\"flame\":%s,\"buzzer\":%s,"
 "\"alert\":\"%s\","
 "\"routerConnected\":%s,"
 "\"wifiMode\":\"%s\""
@@ -712,6 +762,7 @@ sensorData.temperatureC,
 sensorData.humidity,
 sensorData.dhtValid ? "true" : "false",
 sensorData.flame ? "true" : "false",
+    buzzerActive ? "true" : "false",
 levelToString(stableLevel),
 WiFi.status() == WL_CONNECTED ? "true" : "false",
 wifiMode
@@ -735,7 +786,7 @@ break;
 void pushWebSocket() {
 if (webSocket.connectedClients() == 0)
 return;
-char json[320];
+char json[352];
 buildStatusJson(json, sizeof(json));
 webSocket.broadcastTXT(json);
 }
@@ -779,6 +830,15 @@ Serial.printf(
 digitalRead(PIN_FLAME_DO) ? "HIGH" : "LOW",
 sensorData.flame ? "YES" : "NO",
 levelToString(stableLevel)
+);
+// Connectivity diagnostics: why the board may look offline in the app.
+Serial.printf(
+"[NET] status=%s rssi=%d dBm mode=%s wsClients=%u uptime=%lu ms\n",
+WiFi.status() == WL_CONNECTED ? "CONNECTED" : "DISCONNECTED",
+WiFi.RSSI(),
+apActive ? "AP" : "STA",
+webSocket.connectedClients(),
+millis()
 );
 }
 // ============================================================
