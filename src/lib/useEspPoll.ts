@@ -28,7 +28,13 @@ export function useEspPoll() {
       } catch (e) {
         if (!alive) return;
         backoff.current = Math.min(backoff.current * 2, MAX_BACKOFF);
-        setError(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        const isWeb = typeof window !== "undefined";
+        setError(
+          isWeb && msg === "Failed to fetch"
+            ? "blocked or unreachable — phone (Expo Go) works regardless; on web the ESP32 must send CORS headers (see firmware sendHeader)"
+            : msg
+        );
       }
       if (!alive) return;
       timer = setTimeout(tick, POLL_MS * backoff.current);
