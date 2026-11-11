@@ -42,22 +42,29 @@ export type SensorSnapshot = {
   gasPercent: number;
   flame: boolean;
   temperatureC: number;
+  humidity: number;
   alert: AlertLevel;
   lastUpdate: number;
   hardware: HardwareState;
   activity: ActivityEvent[];
   gasHistory: Sample[];
   tempHistory: Sample[];
+  humidityHistory: Sample[];
 };
 
 type SensorStore = SensorSnapshot & {
   pushSnapshot: (partial: Partial<SensorSnapshot>) => void;
+  /** Flag the device as unreachable without touching lastUpdate or history. */
+  markOffline: () => void;
 };
 
 export const GAS_WARNING_THRESHOLD = 25;
 export const GAS_CRITICAL_THRESHOLD = 55;
 export const TEMP_WARNING_THRESHOLD = 42;
 export const TEMP_CRITICAL_THRESHOLD = 55;
+/** DHT11 humidity comfort band (air too dry raises fire risk). */
+export const HUMIDITY_LOW_THRESHOLD = 30;
+export const HUMIDITY_HIGH_THRESHOLD = 80;
 
 const HISTORY_LIMIT = 60;
 
@@ -76,14 +83,15 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
   gasPercent: 12,
   flame: false,
   temperatureC: 27.5,
-  alert: "SAFE",
+  humidity: 55,
+  alert: "OFFLINE",
   lastUpdate: Date.now(),
   hardware: {
-    controller: true,
-    flameSensor: true,
-    mq2Sensor: true,
-    heatSensor: true,
-    led: true,
+    controller: false,
+    flameSensor: false,
+    mq2Sensor: false,
+    heatSensor: false,
+    led: false,
     buzzer: false,
   },
   activity: [
@@ -93,6 +101,7 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
   ],
   gasHistory: [],
   tempHistory: [],
+  humidityHistory: [],
   pushSnapshot: (partial) => {
     const prev = get();
     const gas = partial.gasPercent ?? prev.gasPercent;
@@ -135,6 +144,21 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
       activity: activity.slice(0, 30),
       gasHistory: [...prev.gasHistory, { t: now, v: gas }].slice(-HISTORY_LIMIT),
       tempHistory: [...prev.tempHistory, { t: now, v: temp }].slice(-HISTORY_LIMIT),
+      humidityHistory: [...prev.humidityHistory, { t: now, v: partial.humidity ?? prev.humidity }].slice(-HISTORY_LIMIT),
+    });
+  },
+  markOffline: () => {
+    if (get().alert === "OFFLINE" && !get().hardware.controller) return;
+    set({
+      alert: "OFFLINE",
+      hardware: {
+        controller: false,
+        flameSensor: false,
+        mq2Sensor: false,
+        heatSensor: false,
+        led: false,
+        buzzer: false,
+      },
     });
   },
 }));
@@ -142,7 +166,10 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
 /**
  * REAL ESP32 FEED — subscribes to the live polling store (`useStore`,
  * fed by `useEspPoll` in the root layout) and mirrors every snapshot
- * into the dashboard store. Runs only while an ESP32 address is configured.
+ * into the dashboard store. A staleness watchdog flags the hardware
+ * offline in realtime whenever data stops flowing (device unreachable,
+ * poller error) and flips back online the moment snapshots resume.
+ * Runs only while an ESP32 address is configured.
  */
 const DEVICE_ALERT_MAP: Record<DeviceAlertLevel, AlertLevel> = {
   NORMAL: "SAFE",
@@ -151,12 +178,16 @@ const DEVICE_ALERT_MAP: Record<DeviceAlertLevel, AlertLevel> = {
   UNKNOWN: "OFFLINE",
 };
 
+/** No valid snapshot for this long ⇒ device considered offline. */
+const STALE_MS = 4000;
+const WATCHDOG_TICK_MS = 1000;
+
 export function useEspSensorFeed(): void {
   const espUrl = useStore((s) => s.espUrl);
   useEffect(() => {
     if (!espUrl) {
       // no address configured — dashboard shows waiting state
-      useSensorSource.setState({ alert: "OFFLINE" });
+      useSensorSource.getState().markOffline();
       return;
     }
     const unsub = useStore.subscribe((state) => {
@@ -168,6 +199,7 @@ export function useEspSensorFeed(): void {
       useSensorSource.getState().pushSnapshot({
         gasPercent: st.gasPercent,
         temperatureC: st.dhtValid ? st.temperatureC : 0,
+        humidity: st.dhtValid ? st.humidity : 0,
         flame: st.flame,
         alert: DEVICE_ALERT_MAP[st.alert] ?? "OFFLINE",
         hardware: {
@@ -180,7 +212,17 @@ export function useEspSensorFeed(): void {
         },
       });
     });
-    return unsub;
+    // Watchdog: mark offline while the poller reports an error or snapshots
+    // have stopped arriving (e.g. device unplugged mid-stream).
+    const watch = setInterval(() => {
+      const st = useStore.getState();
+      const stale = !st.lastUpdate || Date.now() - st.lastUpdate > STALE_MS;
+      if (stale || st.error) useSensorSource.getState().markOffline();
+    }, WATCHDOG_TICK_MS);
+    return () => {
+      unsub();
+      clearInterval(watch);
+    };
   }, [espUrl]);
 }
 

@@ -8,6 +8,7 @@
 #include <DHT.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <WebSocketsServer.h>
 #include "driver/gpio.h"
 // ============================================================
 // WIFI CONFIGURATION
@@ -96,6 +97,9 @@ bool flame = false;
 LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
 DHT dht(PIN_DHT, DHT11);
 WebServer server(80);
+// Realtime push: status JSON broadcast to every connected app (port 81).
+// Requires the "WebSockets" library by Markus Sattler (Arduino Library Manager).
+WebSocketsServer webSocket(81);
 SensorData sensorData;
 // ============================================================
 // GLOBAL VARIABLES
@@ -116,6 +120,7 @@ bool apActive = false;
 bool wifiAttemptInProgress = false;
 unsigned long wifiAttemptStartedMs = 0;
 unsigned long lastWifiRetryMs = 0;
+unsigned long lastPushMs = 0;
 // ============================================================
 // UTILITY FUNCTIONS
 // ============================================================
@@ -670,13 +675,26 @@ DASHBOARD_HTML
 }
 void handleStatus() {
 char json[320];
+buildStatusJson(json, sizeof(json));
+// CORS: allow the Expo web app (localhost or LAN IP) to read this API
+server.sendHeader("Access-Control-Allow-Origin", "*");
+server.send(
+200,
+"application/json",
+json
+);
+}
+// ============================================================
+// STATUS JSON (shared by HTTP API + WebSocket push)
+// ============================================================
+void buildStatusJson(char* json, size_t len) {
 const char* wifiMode =
 (WiFi.status() == WL_CONNECTED)
 ? "ROUTER"
 : (apActive ? "ACCESS_POINT" : "CONNECTING");
 snprintf(
 json,
-sizeof(json),
+len,
 "{"
 "\"mq2Raw\":%d,"
 "\"gasPercent\":%d,"
@@ -698,13 +716,28 @@ levelToString(stableLevel),
 WiFi.status() == WL_CONNECTED ? "true" : "false",
 wifiMode
 );
-// CORS: allow the Expo web app (localhost or LAN IP) to read this API
-server.sendHeader("Access-Control-Allow-Origin", "*");
-server.send(
-200,
-"application/json",
-json
-);
+}
+// ============================================================
+// WEBSOCKET PUSH (realtime, ~4 updates/second)
+// ============================================================
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+switch (type) {
+case WStype_CONNECTED:
+Serial.printf("[WS] Client %u connected.\n", num);
+break;
+case WStype_DISCONNECTED:
+Serial.printf("[WS] Client %u disconnected.\n", num);
+break;
+default:
+break;
+}
+}
+void pushWebSocket() {
+if (webSocket.connectedClients() == 0)
+return;
+char json[320];
+buildStatusJson(json, sizeof(json));
+webSocket.broadcastTXT(json);
 }
 void setupWebServer() {
 server.on("/", HTTP_GET, handleRoot);
@@ -718,6 +751,10 @@ server.send(
 });
 server.begin();
 Serial.println("[WEB] Dashboard server started.");
+// Realtime WebSocket push on port 81 (app falls back to HTTP polling).
+webSocket.begin();
+webSocket.onEvent(webSocketEvent);
+Serial.println("[WS] WebSocket push server started on port 81.");
 }
 // ============================================================
 // SERIAL LOGGING
@@ -870,5 +907,11 @@ logSerial();
 maintainWiFi(now);
 // Web server requests
 server.handleClient();
+// WebSocket push (~4 updates/second to every connected app)
+if (now - lastPushMs >= 250) {
+lastPushMs = now;
+pushWebSocket();
+}
+webSocket.loop();
 delay(2);
 }

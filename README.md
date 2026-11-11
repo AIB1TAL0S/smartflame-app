@@ -1,20 +1,22 @@
 # SmartFlame — ESP32 Fire Detection + Expo Companion App
 
 ESP32 (MQ2 + flame + DHT11 + buzzer + LCD) streams sensor JSON on its own web server.
-The Expo app polls `/api/status` every second — same architecture as
-[JuanLiz/smart-parking-mqtt](https://github.com/JuanLiz/smart-parking-mqtt) (ESP32 web server + companion app), minus the MQTT broker.
+The Expo app connects over **WebSocket** (`ws://<board-ip>:81/`) for realtime ~250 ms
+push updates, and automatically falls back to polling `/api/status` every second
+when the socket is unavailable.
 
 ```
 ESP32 ── WiFi router (or its own AP hotspot) ── phone running Expo Go
   │
-  └─ http://<board-ip>/api/status  → JSON every request
+  ├─ ws://<board-ip>:81/           → JSON pushed ~4×/second (realtime)
+  └─ http://<board-ip>/api/status  → JSON fallback poll (1 s + backoff)
 ```
 
 ## Repo layout
-- `firmware/SmartFlame/SmartFlame.ino` — the sketch (WiFi + AP fallback + web dashboard)
+- `firmware/SmartFlame/SmartFlame.ino` — the sketch (WiFi + AP fallback + web dashboard + WebSocket push; requires the **WebSockets** library by Markus Sattler from the Arduino Library Manager)
 - `src/app/` — expo-router screens: dashboard, alert siren, settings (ESP32 IP entry)
-- `src/lib/` — `useEspPoll.ts` (1 s poll + backoff), `store.ts` (zustand), `persist.ts` (SecureStore), `types.ts` (matches sketch JSON exactly)
-- `scripts/esp32-sim.py` — simulates the board for app development without hardware
+- `src/lib/` — `useEspPoll.ts` (WebSocket-first feed with 1 s poll fallback), `store.ts` (zustand), `persist.ts` (SecureStore), `types.ts` (matches sketch JSON exactly)
+- `scripts/esp32-sim.py` — simulates the board (HTTP + optional WebSocket) for app development without hardware
 
 ## ESP32 API (already in the sketch)
 `GET /api/status` →
@@ -41,4 +43,4 @@ Enter `http://<pc-ip>:8080` in the app (PC and phone on same network).
 ## Why this design
 - No cloud, no broker, no accounts — dashboard works even if the internet is down
 - AP fallback: if the router is gone the board hosts `SmartFlame-ESP32` (pass `flame1234`) and the app still reaches it at `192.168.4.1`
-- 1 s polling matches the sketch's own web dashboard refresh rate
+- Realtime WebSocket push (~250 ms); 1 s HTTP poll is only a fallback

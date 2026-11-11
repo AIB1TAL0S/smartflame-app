@@ -17,6 +17,7 @@ import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
 import { GasSensorCard } from "@/components/dashboard/GasSensorCard";
 import { FlameSensorCard } from "@/components/dashboard/FlameSensorCard";
 import { HeatSensorCard } from "@/components/dashboard/HeatSensorCard";
+import { HumiditySensorCard } from "@/components/dashboard/HumiditySensorCard";
 import { HardwareStatusCard } from "@/components/dashboard/HardwareStatusCard";
 import { ActivityCard } from "@/components/dashboard/ActivityCard";
 import { SensorAnalyticsCard } from "@/components/dashboard/SensorAnalyticsCard";
@@ -60,6 +61,7 @@ export default function Dashboard() {
       <GasSensorCard />
       <FlameSensorCard />
       <HeatSensorCard />
+      <HumiditySensorCard />
     </>
   );
 

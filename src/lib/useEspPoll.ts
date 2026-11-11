@@ -2,10 +2,32 @@ import { useEffect, useRef } from "react";
 import { useStore } from "./store";
 import { parseStatus } from "./types";
 
-const POLL_MS = 1000; // sketch serves fresh JSON every request
+const POLL_MS = 1000; // HTTP fallback poll
 const MAX_BACKOFF = 8;
+const WS_PORT = 81; // firmware WebSocketsServer port
+const WS_RETRY_MS = 3000;
 
-/** Polls the ESP32 web dashboard API every second (LAN only). */
+function toWsUrl(espUrl: string): string | null {
+  try {
+    const u = new URL(espUrl.replace(/^http/, "ws"));
+    u.port = String(WS_PORT);
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Realtime sensor feed.
+ *
+ * Preferred path: WebSocket to ws://<esp>:81/ — the board pushes the same
+ * status JSON as /api/status every 250 ms, so updates land instantly.
+ *
+ * Fallback path: whenever the socket is not open (older firmware, blocked
+ * port, connecting…), the hook polls GET /api/status every second with the
+ * original exponential backoff. The two paths share one tick loop, so
+ * switching between them is seamless and needs no state in the UI.
+ */
 export function useEspPoll() {
   const espUrl = useStore((s) => s.espUrl);
   const setStatus = useStore((s) => s.setStatus);
@@ -16,8 +38,58 @@ export function useEspPoll() {
     if (!espUrl) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
+    let ws: WebSocket | null = null;
+    let wsTimer: ReturnType<typeof setTimeout> | null = null;
+    let socketOk = false;
 
+    const clearError = () => setError(null);
+
+    const connectSocket = () => {
+      const wsUrl = toWsUrl(espUrl);
+      if (!wsUrl || !alive) return;
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch {
+        ws = null;
+        return;
+      }
+      ws.onopen = () => {
+        if (!alive) {
+          ws?.close();
+          return;
+        }
+        socketOk = true;
+        backoff.current = 1;
+        clearError();
+      };
+      ws.onmessage = (ev) => {
+        if (!alive || !socketOk || typeof ev.data !== "string") return;
+        try {
+          setStatus(parseStatus(JSON.parse(ev.data)));
+        } catch {
+          // ignore malformed frames; next push will resync
+        }
+      };
+      ws.onerror = () => {
+        // onclose fires after this; nothing to do here
+      };
+      ws.onclose = () => {
+        ws = null;
+        if (!alive) return;
+        socketOk = false;
+        wsTimer = setTimeout(connectSocket, WS_RETRY_MS);
+      };
+    };
+
+    connectSocket();
+
+    // Fallback tick: polls only while the socket is down; otherwise it
+    // just idles at POLL_MS so it can resume the instant the socket drops.
     const tick = async () => {
+      if (socketOk) {
+        timer = setTimeout(tick, POLL_MS);
+        return;
+      }
       try {
         const res = await fetch(`${espUrl}/api/status`, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -44,6 +116,8 @@ export function useEspPoll() {
     return () => {
       alive = false;
       clearTimeout(timer);
+      if (wsTimer) clearTimeout(wsTimer);
+      ws?.close();
     };
   }, [espUrl, setStatus, setError]);
 }
