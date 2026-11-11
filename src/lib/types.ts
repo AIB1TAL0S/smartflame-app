@@ -1,15 +1,29 @@
-export type Datastreams = {
-  gas: number; // V1 percent 0-100 (MQ2 normalized by firmware)
-  flame: number; // V2 0/1
-  temp: number; // V3 °C
-  hum: number; // V4 %
-  alarm: number; // V5 0/1 buzzer state
+export type AlertLevel = "NORMAL" | "WARNING" | "EMERGENCY" | "UNKNOWN";
+
+export type DeviceStatus = {
+  mq2Raw: number;
+  gasPercent: number;
+  temperatureC: number;
+  humidity: number;
+  dhtValid: boolean;
+  flame: boolean;
+  alert: AlertLevel;
+  routerConnected: boolean;
+  wifiMode: "ROUTER" | "ACCESS_POINT" | "CONNECTING";
 };
 
-export type DeviceSnapshot = {
-  data: Datastreams;
-  connected: boolean;
-  at: number; // epoch ms
-};
-
-export const FIRE_ACTIVE = (d: Datastreams) => d.flame === 1;
+/** Matches the /api/status JSON from the ESP32 sketch exactly. */
+export function parseStatus(json: Record<string, unknown>): DeviceStatus {
+  const num = (k: string) => Number(json[k]) || 0;
+  return {
+    mq2Raw: num("mq2Raw"),
+    gasPercent: num("gasPercent"),
+    temperatureC: num("temperatureC"),
+    humidity: num("humidity"),
+    dhtValid: json.dhtValid === true,
+    flame: json.flame === true,
+    alert: ((json.alert as string) ?? "UNKNOWN") as AlertLevel,
+    routerConnected: json.routerConnected === true,
+    wifiMode: ((json.wifiMode as string) ?? "CONNECTING") as DeviceStatus["wifiMode"],
+  };
+}

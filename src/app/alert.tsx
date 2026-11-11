@@ -2,15 +2,12 @@ import { StyleSheet, Text, View, Pressable, Animated, Easing } from "react-nativ
 import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import { useStore } from "@/lib/store";
-import { updateUrl } from "@/lib/blynk";
 
 export default function AlertScreen() {
-  const data = useStore((s) => s.data);
-  const settings = useStore((s) => s.settings);
+  const status = useStore((s) => s.status);
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // flash red/white while flame still detected
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.35, duration: 420, easing: Easing.linear, useNativeDriver: true }),
@@ -21,23 +18,18 @@ export default function AlertScreen() {
     return () => anim.stop();
   }, [opacity]);
 
-  const mute = async () => {
-    if (!settings.token) return;
-    await fetch(updateUrl(settings.region, settings.token, "V5", 0)).catch(() => undefined);
-  };
-
-  const clear = data?.flame !== 1;
+  const clear = status?.alert !== "EMERGENCY";
 
   return (
     <Animated.View style={[styles.root, { opacity }]}>
       <Text style={styles.icon}>🔥</Text>
-      <Text style={styles.head}>FIRE DETECTED</Text>
+      <Text style={styles.head}>EMERGENCY</Text>
       <Text style={styles.sub}>
-        {clear ? "Flame cleared — safe to dismiss." : "Flame sensor active. Evacuate and call emergency services."}
+        {clear ? "Alert cleared — safe to dismiss." : "Fire/gas emergency on SmartFlame unit. Evacuate and call emergency services."}
       </Text>
-      {data ? (
+      {status ? (
         <Text style={styles.meta}>
-          gas {data.gas} ppm · temp {data.temp.toFixed(1)}°C · hum {data.hum.toFixed(0)}%
+          gas {status.gasPercent}% · temp {status.temperatureC}°C · hum {status.humidity}% · flame {status.flame ? "YES" : "no"}
         </Text>
       ) : null}
 
@@ -46,11 +38,7 @@ export default function AlertScreen() {
           <Text style={styles.btnText}>DISMISS</Text>
         </Pressable>
       ) : (
-        <View style={styles.row}>
-          <Pressable style={[styles.btn, styles.muted]} onPress={mute}>
-            <Text style={styles.btnText}>MUTE BUZZER</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.hint}>Buzzer is sounding on the unit. Alert auto-dismisses when level drops.</Text>
       )}
     </Animated.View>
   );
@@ -62,8 +50,7 @@ const styles = StyleSheet.create({
   head: { color: "#fff", fontSize: 36, fontWeight: "900", letterSpacing: 2 },
   sub: { color: "#FFCDD2", fontSize: 16, textAlign: "center" },
   meta: { color: "#FF8A80", fontSize: 13, fontVariant: ["tabular-nums"] },
-  row: { flexDirection: "row", gap: 12 },
+  hint: { color: "#FFCDD2", fontSize: 13, textAlign: "center" },
   btn: { backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
-  muted: { backgroundColor: "#00000055", borderWidth: 1.5, borderColor: "#fff" },
   btnText: { color: "#B71C1C", fontWeight: "900", letterSpacing: 1 },
 });

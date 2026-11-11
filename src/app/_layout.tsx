@@ -1,32 +1,19 @@
+import { useEffect } from "react";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "react-native";
-import { useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { initNotifications, addNotificationResponseListener } from "@/lib/notifications";
-import { useBlynkPoll } from "@/lib/useBlynkPoll";
 import { useSettingsBootstrap } from "@/lib/persist";
-import { router } from "expo-router";
-
-SplashScreen.preventAutoHideAsync();
+import { useEspPoll } from "@/lib/useEspPoll";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useSettingsBootstrap();
+  useEspPoll();
 
-  useEffect(() => {
-    initNotifications().catch(() => undefined);
-    const sub = addNotificationResponseListener(() => router.push("/alert"));
-    SplashScreen.hideAsync().catch(() => undefined);
-    return () => sub.remove();
-  }, []);
-
-  useBlynkPoll();
-
-  const fireActive = useStore((s) => s.data?.flame === 1);
+  const fireActive = useStore((s) => s.status?.alert === "EMERGENCY");
 
   useEffect(() => {
     if (fireActive) router.push("/alert");

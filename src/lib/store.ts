@@ -1,45 +1,31 @@
 import { create } from "zustand";
-import { Datastreams, FIRE_ACTIVE } from "./types";
-
-type Settings = {
-  token: string;
-  region: string; // "" = blynk.cloud global, else subdomain e.g. "lon1"
-  pollMs: number;
-};
+import { AlertLevel, DeviceStatus } from "./types";
 
 type State = {
-  data: Datastreams | null;
-  history: number[]; // last 50 gas values
-  connected: boolean | null;
+  status: DeviceStatus | null;
+  history: number[]; // gas % samples
   error: string | null;
-  pushToken: string | null;
-  settings: Settings;
-  setSnapshot: (d: Datastreams, connected: boolean) => void;
+  /** "" = not configured; e.g. "http://192.168.1.50" */
+  espUrl: string;
+  lastUpdate: number | null;
+  setStatus: (s: DeviceStatus) => void;
   setError: (e: string | null) => void;
-  setPushToken: (t: string | null) => void;
-  patchSettings: (p: Partial<Settings>) => void;
-  fireActive: () => boolean;
+  setEspUrl: (u: string) => void;
 };
 
-export const useStore = create<State>((set, get) => ({
-  data: null,
+export const useStore = create<State>((set) => ({
+  status: null,
   history: [],
-  connected: null,
   error: null,
-  pushToken: null,
-  settings: { token: "", region: "blynk.cloud", pollMs: 3000 },
-  setSnapshot: (d, connected) =>
-    set((s) => ({
-      data: d,
-      connected,
+  espUrl: "",
+  lastUpdate: null,
+  setStatus: (s) =>
+    set((prev) => ({
+      status: s,
+      history: [...prev.history, s.gasPercent].slice(-50),
       error: null,
-      history: [...s.history, d.gas].slice(-50),
+      lastUpdate: Date.now(),
     })),
   setError: (e) => set({ error: e }),
-  setPushToken: (t) => set({ pushToken: t }),
-  patchSettings: (p) => set((s) => ({ settings: { ...s.settings, ...p } })),
-  fireActive: () => {
-    const d = get().data;
-    return !!d && FIRE_ACTIVE(d);
-  },
+  setEspUrl: (u) => set({ espUrl: u.replace(/\/+$/, "") }),
 }));
