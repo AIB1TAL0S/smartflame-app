@@ -1,125 +1,114 @@
-import { StyleSheet, Text, View, Pressable } from "react-native";
+﻿/**
+ * SmartFlame main dashboard.
+ *
+ * Mobile: single-column, status first, compact cards.
+ * Desktop (>=1024px): multi-column professional grid.
+ *
+ * All sensor data comes from the centralized `useSensorSource` store.
+ */
+
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
+import { useEspSensorFeed } from "@/lib/sensorSource";
 import { useStore } from "@/lib/store";
-import { AlertLevel } from "@/lib/types";
+import { COLORS } from "@/components/dashboard/ui";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
+import { GasSensorCard } from "@/components/dashboard/GasSensorCard";
+import { FlameSensorCard } from "@/components/dashboard/FlameSensorCard";
+import { HeatSensorCard } from "@/components/dashboard/HeatSensorCard";
+import { HardwareStatusCard } from "@/components/dashboard/HardwareStatusCard";
+import { ActivityCard } from "@/components/dashboard/ActivityCard";
+import { SensorAnalyticsCard } from "@/components/dashboard/SensorAnalyticsCard";
 
-const COLORS = {
-  bg: "#0B0F14",
-  card: "#141A22",
-  text: "#E8EEF5",
-  muted: "#8B98A8",
-  ok: "#2ECC71",
-  warn: "#F39C12",
-  fire: "#FF1744",
-  accent: "#3B82F6",
-};
+const GAP = 14;
 
-const LEVEL_COLOR: Record<AlertLevel, string> = {
-  NORMAL: COLORS.ok,
-  WARNING: COLORS.warn,
-  EMERGENCY: COLORS.fire,
-  UNKNOWN: COLORS.muted,
-};
+/** Shown while no ESP32 address is configured or the device is unreachable. */
+function ConnectionBanner() {
+  const espUrl = useStore((s) => s.espUrl);
+  const error = useStore((s) => s.error);
 
-function Pill({ label, color }: { label: string; color: string }) {
-  return (
-    <View style={[styles.pill, { backgroundColor: color + "22", borderColor: color }]}>
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
-function Card({ title, value, unit, color }: { title: string; value: string; unit?: string; color?: string }) {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={[styles.cardValue, { color: color ?? COLORS.text }]}>
-        {value}
-        {unit ? <Text style={styles.cardUnit}> {unit}</Text> : null}
-      </Text>
-    </View>
-  );
+  if (!espUrl) {
+    return (
+      <Pressable style={[styles.banner, { borderColor: COLORS.warn }]} onPress={() => router.push("/settings")}>
+        <Text style={[styles.bannerText, { color: COLORS.warn }]}>
+          ⚠ No ESP32 address configured — tap to add it in Settings (serial command "i" prints it).
+        </Text>
+      </Pressable>
+    );
+  }
+  if (error) {
+    return (
+      <View style={[styles.banner, { borderColor: COLORS.fire }]}>
+        <Text style={[styles.bannerText, { color: COLORS.fire }]}>
+          ⚠ {espUrl} unreachable ({error}) — check the phone is on the same WiFi as the ESP32.
+        </Text>
+      </View>
+    );
+  }
+  return null;
 }
 
 export default function Dashboard() {
-  const status = useStore((s) => s.status);
-  const error = useStore((s) => s.error);
-  const espUrl = useStore((s) => s.espUrl);
-  const history = useStore((s) => s.history);
+  useEspSensorFeed(); // live data from the ESP32 polling store
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768 && width < 1024;
 
-  const emergency = status?.alert === "EMERGENCY";
-  const connected = !!status;
-  const mode = status?.wifiMode === "ROUTER" ? "ROUTER" : status?.wifiMode === "ACCESS_POINT" ? "AP HOTSPOT" : "CONNECTING";
-  const pillColor = emergency ? COLORS.fire : connected ? COLORS.ok : COLORS.muted;
-  const pillLabel = emergency ? "EMERGENCY" : status?.alert === "WARNING" ? "WARNING" : connected ? mode : "NO LINK";
+  const sensorCards = (
+    <>
+      <GasSensorCard />
+      <FlameSensorCard />
+      <HeatSensorCard />
+    </>
+  );
 
-  const maxGas = Math.max(1, ...history);
+  if (isDesktop) {
+    return (
+      <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+        <DashboardHeader />
+        <ConnectionBanner />
+        <View style={styles.desktopGrid}>
+          <View style={styles.col}>
+            <SystemStatusCard />
+            <HardwareStatusCard />
+          </View>
+          <View style={styles.colWide}>{sensorCards}</View>
+          <View style={styles.col}>
+            <ActivityCard maxItems={8} />
+            <SensorAnalyticsCard />
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
-    <View style={styles.root}>
-      <View style={styles.header}>
-        <Text style={styles.title}>SmartFlame</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={12}>
-          <Text style={styles.gear}>⚙︎</Text>
-        </Pressable>
-      </View>
-
-      <Pill label={pillLabel} color={pillColor} />
-
-      {error ? <Text style={styles.error}>⚠ {error} — check phone is on same WiFi as ESP32</Text> : null}
-      {!espUrl ? (
-        <Text style={styles.error}>No ESP32 address yet — add it in ⚙︎ settings (serial command "i" prints it)</Text>
-      ) : null}
-
-      <View style={styles.grid}>
-        <Card title="Gas (MQ2)" value={status ? String(status.gasPercent) : "—"} unit="%" color={status && status.gasPercent > 60 ? COLORS.warn : COLORS.text} />
-        <Card title="Flame" value={status ? (status.flame ? "DETECTED" : "clear") : "—"} color={status?.flame ? COLORS.fire : COLORS.ok} />
-        <Card title="Temperature" value={status?.dhtValid ? String(status.temperatureC) : "—"} unit="°C" />
-        <Card title="Humidity" value={status?.dhtValid ? String(status.humidity) : "—"} unit="%" />
-      </View>
-
-      <View style={[styles.card, { minHeight: 60 }]}>
-        <Text style={styles.cardTitle}>Gas history (last {history.length})</Text>
-        <View style={styles.sparkRow}>
-          {history.slice(-40).map((v, i) => (
-            <View
-              key={i}
-              style={[styles.sparkBar, { height: 4 + (v / maxGas) * 44, backgroundColor: v / maxGas > 0.6 ? COLORS.warn : COLORS.accent }]}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: LEVEL_COLOR[status?.alert ?? "UNKNOWN"] }]}>
-        <Text style={styles.cardTitle}>System status</Text>
-        <Text style={[styles.statusValue, { color: LEVEL_COLOR[status?.alert ?? "UNKNOWN"] }]}>
-          {status?.alert ?? "WAITING"}
-        </Text>
-        {status ? (
-          <Text style={styles.meta}>
-            {status.routerConnected ? "Router connected" : "AP hotspot active"} · raw {status.mq2Raw}
-          </Text>
-        ) : null}
-      </View>
-    </View>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+      <DashboardHeader />
+      <ConnectionBanner />
+      <SystemStatusCard />
+      {isTablet ? <View style={styles.tabletRow}>{sensorCards}</View> : <View style={styles.stack}>{sensorCards}</View>}
+      <HardwareStatusCard />
+      <ActivityCard />
+      <SensorAnalyticsCard />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, padding: 16, paddingTop: 60, gap: 14 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { color: COLORS.text, fontSize: 28, fontWeight: "800" },
-  gear: { color: COLORS.muted, fontSize: 26 },
-  pill: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
-  pillText: { fontSize: 13, fontWeight: "700", letterSpacing: 1 },
-  error: { color: COLORS.warn, fontSize: 13 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  card: { backgroundColor: COLORS.card, borderRadius: 14, padding: 14, flexGrow: 1, flexBasis: "46%" },
-  cardTitle: { color: COLORS.muted, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 },
-  cardValue: { fontSize: 30, fontWeight: "800", marginTop: 6 },
-  cardUnit: { fontSize: 14, fontWeight: "400", color: COLORS.muted },
-  statusValue: { fontSize: 26, fontWeight: "900", marginTop: 4 },
-  meta: { color: COLORS.muted, fontSize: 12, marginTop: 6 },
-  sparkRow: { flexDirection: "row", alignItems: "flex-end", gap: 2, marginTop: 8, height: 52 },
-  sparkBar: { width: 5, borderRadius: 2 },
+  root: { flex: 1, backgroundColor: "#0B0F14" },
+  content: { padding: 16, paddingTop: 60, gap: GAP },
+  stack: { gap: GAP },
+  tabletRow: { flexDirection: "row", gap: GAP },
+  desktopGrid: { flexDirection: "row", gap: GAP, alignItems: "flex-start" },
+  col: { flex: 1, gap: GAP },
+  colWide: { flex: 1.2, gap: GAP },
+  banner: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#141A22",
+  },
+  bannerText: { fontSize: 13, fontWeight: "600", lineHeight: 18 },
 });
