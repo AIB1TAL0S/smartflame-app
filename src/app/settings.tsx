@@ -2,14 +2,17 @@ import { useState } from "react";
 import { StyleSheet, Text, View, TextInput, Pressable, ScrollView } from "react-native";
 import { router } from "expo-router";
 import { useStore } from "@/lib/store";
-import { saveEspUrl } from "@/lib/persist";
+import { saveEspUrl, saveEmergencyNumber } from "@/lib/persist";
 
 export default function SettingsScreen() {
   const espUrl = useStore((s) => s.espUrl);
   const status = useStore((s) => s.status);
   const lastUpdate = useStore((s) => s.lastUpdate);
   const setEspUrl = useStore((s) => s.setEspUrl);
+  const emergencyNumber = useStore((s) => s.emergencyNumber);
+  const setEmergencyNumber = useStore((s) => s.setEmergencyNumber);
   const [draft, setDraft] = useState(espUrl);
+  const [numberDraft, setNumberDraft] = useState(emergencyNumber);
   const [saved, setSaved] = useState(false);
 
   const save = async () => {
@@ -17,6 +20,8 @@ export default function SettingsScreen() {
     const withScheme = /^https?:\/\//.test(clean) ? clean : `http://${clean}`;
     setEspUrl(withScheme);
     await saveEspUrl(withScheme);
+    setEmergencyNumber(numberDraft.trim());
+    await saveEmergencyNumber(numberDraft.trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -45,6 +50,19 @@ export default function SettingsScreen() {
       <Pressable style={styles.primary} onPress={save}>
         <Text style={styles.primaryText}>{saved ? "Saved ✓" : "Save"}</Text>
       </Pressable>
+
+      <Text style={styles.label}>Emergency number</Text>
+      <TextInput
+        style={styles.input}
+        value={numberDraft}
+        onChangeText={setNumberDraft}
+        placeholder="711"
+        placeholderTextColor="#5B6675"
+        keyboardType="phone-pad"
+      />
+      <Text style={styles.hint}>
+        Dialed automatically the moment an EMERGENCY starts (also shown as a big CALL button on the alert screen). Default: 711.
+      </Text>
 
       <Text style={styles.label}>Connection</Text>
       <Text style={styles.mono}>

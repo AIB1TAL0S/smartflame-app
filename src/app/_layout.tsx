@@ -6,12 +6,14 @@ import { useColorScheme } from "react-native";
 import { useStore } from "@/lib/store";
 import { useSettingsBootstrap } from "@/lib/persist";
 import { useEspPoll } from "@/lib/useEspPoll";
+import { useEmergencyWatch } from "@/lib/useEmergencyWatch";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useSettingsBootstrap();
   useEspPoll();
+  useEmergencyWatch();
 
   const fireActive = useStore((s) => s.status?.alert === "EMERGENCY");
 

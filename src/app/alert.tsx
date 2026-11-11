@@ -2,9 +2,11 @@ import { StyleSheet, Text, View, Pressable, Animated, Easing } from "react-nativ
 import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import { useStore } from "@/lib/store";
+import { callEmergency } from "@/lib/emergency";
 
 export default function AlertScreen() {
   const status = useStore((s) => s.status);
+  const emergencyNumber = useStore((s) => s.emergencyNumber);
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -33,6 +35,12 @@ export default function AlertScreen() {
         </Text>
       ) : null}
 
+      {!clear && (
+        <Pressable style={styles.callBtn} onPress={() => callEmergency(emergencyNumber)}>
+          <Text style={styles.callText}>📞 CALL {emergencyNumber || "EMERGENCY"}</Text>
+        </Pressable>
+      )}
+
       {clear ? (
         <Pressable style={styles.btn} onPress={() => router.navigate("/")}>
           <Text style={styles.btnText}>DISMISS</Text>
@@ -51,6 +59,8 @@ const styles = StyleSheet.create({
   sub: { color: "#FFCDD2", fontSize: 16, textAlign: "center" },
   meta: { color: "#FF8A80", fontSize: 13, fontVariant: ["tabular-nums"] },
   hint: { color: "#FFCDD2", fontSize: 13, textAlign: "center" },
+  callBtn: { backgroundColor: "#fff", borderRadius: 16, paddingHorizontal: 32, paddingVertical: 16, marginTop: 4 },
+  callText: { color: "#B71C1C", fontWeight: "900", fontSize: 18, letterSpacing: 1 },
   btn: { backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
   btnText: { color: "#B71C1C", fontWeight: "900", letterSpacing: 1 },
 });

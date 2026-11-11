@@ -4,31 +4,38 @@ import { useEffect } from "react";
 import { useStore } from "./store";
 
 const KEY_URL = "smartflame.espUrl";
+const KEY_NUMBER = "smartflame.emergencyNumber";
 
-async function readUrl(): Promise<string | null> {
+async function read(key: string): Promise<string | null> {
   if (Platform.OS === "web") {
-    return localStorage.getItem(KEY_URL);
+    return localStorage.getItem(key);
   }
-  return SecureStore.getItemAsync(KEY_URL);
+  return SecureStore.getItemAsync(key);
 }
 
-async function writeUrl(url: string): Promise<void> {
+async function write(key: string, value: string): Promise<void> {
   if (Platform.OS === "web") {
-    localStorage.setItem(KEY_URL, url);
+    localStorage.setItem(key, value);
     return;
   }
-  await SecureStore.setItemAsync(KEY_URL, url);
+  await SecureStore.setItemAsync(key, value);
 }
 
 export async function saveEspUrl(url: string): Promise<void> {
-  await writeUrl(url);
+  await write(KEY_URL, url);
+}
+
+export async function saveEmergencyNumber(n: string): Promise<void> {
+  await write(KEY_NUMBER, n);
 }
 
 export function useSettingsBootstrap() {
   useEffect(() => {
-    readUrl()
-      .then((u) => {
-        if (u) useStore.getState().setEspUrl(u);
+    Promise.all([read(KEY_URL), read(KEY_NUMBER)])
+      .then(([url, number]) => {
+        if (url) useStore.getState().setEspUrl(url);
+        // store default is "711"; saved value wins only if user ever saved one
+        if (number) useStore.getState().setEmergencyNumber(number);
       })
       .catch(() => undefined);
   }, []);
