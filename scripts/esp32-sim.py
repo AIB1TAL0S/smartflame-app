@@ -10,7 +10,7 @@ import http.server, json, random, sys, threading, time
 
 FIRE = "--fire" in sys.argv
 PORT = int(sys.argv[-1]) if sys.argv[-1].isdigit() else 8080
-WS_PORT = 81
+WS_PORT = 8081  # 81 needs root on Linux; app accepts any port via the ws URL
 
 def status_payload():
     gas = random.randint(75, 95) if FIRE else random.randint(3, 15)
