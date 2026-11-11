@@ -52,7 +52,7 @@ export default function SettingsScreen() {
       </Text>
       <Text style={styles.mono}>{espUrl || "not configured"}</Text>
 
-      <Pressable style={styles.closeBtn} onPress={() => router.back()}>
+      <Pressable style={styles.closeBtn} onPress={() => router.navigate("/")}>
         <Text style={styles.closeText}>Close</Text>
       </Pressable>
     </ScrollView>

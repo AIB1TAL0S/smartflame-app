@@ -16,7 +16,7 @@ export default function RootLayout() {
   const fireActive = useStore((s) => s.status?.alert === "EMERGENCY");
 
   useEffect(() => {
-    if (fireActive) router.push("/alert");
+    if (fireActive) router.navigate("/alert");
   }, [fireActive]);
 
   return (

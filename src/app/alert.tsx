@@ -34,7 +34,7 @@ export default function AlertScreen() {
       ) : null}
 
       {clear ? (
-        <Pressable style={styles.btn} onPress={() => router.back()}>
+        <Pressable style={styles.btn} onPress={() => router.navigate("/")}>
           <Text style={styles.btnText}>DISMISS</Text>
         </Pressable>
       ) : (
