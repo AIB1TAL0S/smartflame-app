@@ -12,8 +12,8 @@
 // ============================================================
 // WIFI CONFIGURATION
 // ============================================================
-const char* WIFI_SSID = "Cuadro pogi";
-const char* WIFI_PASSWORD = "ORDAUC67LINO";
+const char* WIFI_SSID = "YOUR_WIFI_NAME";        // your router WiFi name
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"; // your router WiFi password
 const char* AP_SSID = "SmartFlame-ESP32";
 const char* AP_PASSWORD = "flame1234";
 // ============================================================
