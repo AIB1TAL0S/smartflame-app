@@ -178,8 +178,6 @@ const DEVICE_ALERT_MAP: Record<DeviceAlertLevel, AlertLevel> = {
  *  The board's WiFi link drops ~28% of polls (measured); stretches of 8+
  *  consecutive failures are common, so the window must cover them. */
 const STALE_MS = 15000;
-/** Show "stale data" hint when nothing new arrives for this long. */
-const STALE_HINT_MS = 8000;
 const WATCHDOG_TICK_MS = 1000;
 
 export function useEspSensorFeed(): void {
@@ -237,6 +235,15 @@ export function timeAgo(ts: number): string {
   const m = Math.round(s / 60);
   if (m < 60) return `${m}m ago`;
   return `${Math.round(m / 60)}h ago`;
+}
+
+/**
+ * True while the watchdog has flagged the device offline (no fresh data).
+ * Cards use this to dim readings, label them "Last known", and replace
+ * misleading green verdicts (NORMAL / NO FLAME) with a neutral UNKNOWN.
+ */
+export function useOffline(): boolean {
+  return useSensorSource((s) => s.alert === "OFFLINE");
 }
 
 export function formatTime(ts: number): string {

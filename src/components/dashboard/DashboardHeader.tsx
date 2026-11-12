@@ -1,10 +1,11 @@
-/** Header: instrument-panel masthead — wordmark left, live clock + link state right. */
+/** Header: instrument-panel masthead — wordmark left, live clock right.
+ *  Link state lives solely in the GlobalStatusBar / ConnectionCard. */
 
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useSensorSource, AlertLevel } from "@/lib/sensorSource";
-import { COLORS, StatusDot } from "./ui";
+import { COLORS } from "./ui";
 
 const ALERT_COLOR: Record<AlertLevel, string> = {
   SAFE: COLORS.ok,
@@ -15,21 +16,12 @@ const ALERT_COLOR: Record<AlertLevel, string> = {
 
 export function DashboardHeader() {
   const alert = useSensorSource((s) => s.alert);
-  const hardware = useSensorSource((s) => s.hardware);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-
-  const online = hardware.controller && hardware.flameSensor && hardware.mq2Sensor && hardware.heatSensor;
-  const linkColor = online ? ALERT_COLOR[alert] : COLORS.muted;
-  const linkLabel = online
-    ? alert === "CRITICAL"
-      ? "ALERT ACTIVE"
-      : "ALL SYSTEMS LINKED"
-    : "LINK FAULT";
 
   return (
     <View style={styles.header}>
@@ -56,10 +48,6 @@ export function DashboardHeader() {
         <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.gearBtn}>
           <Text style={styles.gear}>⚙</Text>
         </Pressable>
-        <View style={[styles.linkPill, { borderColor: linkColor + "55" }]}>
-          <StatusDot color={linkColor} pulse={alert === "CRITICAL"} />
-          <Text style={[styles.linkText, { color: linkColor }]}>{linkLabel}</Text>
-        </View>
       </View>
     </View>
   );
@@ -97,14 +85,4 @@ const styles = StyleSheet.create({
   date: { color: COLORS.muted, fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", marginTop: 2 },
   gearBtn: { paddingHorizontal: 6, paddingVertical: 4 },
   gear: { color: COLORS.muted, fontSize: 20 },
-  linkPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  linkText: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
 });

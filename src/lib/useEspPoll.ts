@@ -36,12 +36,17 @@ export function useEspPoll() {
   const espUrl = useStore((s) => s.espUrl);
   const setStatus = useStore((s) => s.setStatus);
   const setError = useStore((s) => s.setError);
+  const retryNonce = useStore((s) => s.retryNonce);
   const backoff = useRef(1);
   const wsFails = useRef(0);
   const wsDisabled = useRef(false);
 
   useEffect(() => {
     if (!espUrl) return;
+    // Retry resets backoff + re-enables the WS path; the effect re-runs below.
+    backoff.current = 1;
+    wsFails.current = 0;
+    wsDisabled.current = false;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     let ws: WebSocket | null = null;
@@ -143,5 +148,5 @@ export function useEspPoll() {
       ws?.close();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [espUrl, setStatus, setError]);
+  }, [espUrl, setStatus, setError, retryNonce]);
 }

@@ -1,16 +1,16 @@
-﻿/**
+/**
  * SmartFlame main dashboard — instrument panel layout.
  *
  * Desktop (>=1024px): [ verdict strip | sensor dials | log + traces ]
  * Mobile: single column, verdict first.
  */
 
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { router } from "expo-router";
+import { ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useEspSensorFeed } from "@/lib/sensorSource";
-import { useStore } from "@/lib/store";
 import { COLORS } from "@/components/dashboard/ui";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { GlobalStatusBar } from "@/components/dashboard/GlobalStatusBar";
+import { ConnectionCard } from "@/components/dashboard/ConnectionCard";
 import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
 import { GasSensorCard } from "@/components/dashboard/GasSensorCard";
 import { FlameSensorCard } from "@/components/dashboard/FlameSensorCard";
@@ -21,74 +21,56 @@ import { SensorAnalyticsCard } from "@/components/dashboard/SensorAnalyticsCard"
 
 const GAP = 12;
 
-/** Shown while no ESP32 address is configured or the device is unreachable. */
-function ConnectionBanner() {
-  const espUrl = useStore((s) => s.espUrl);
-  const error = useStore((s) => s.error);
-
-  if (!espUrl) {
-    return (
-      <Pressable style={[styles.banner, { borderColor: COLORS.warn }]} onPress={() => router.push("/settings")}>
-        <Text style={[styles.bannerText, { color: COLORS.warn }]}>
-          No controller address configured — tap to add it in Settings (serial command "i" prints it).
-        </Text>
-      </Pressable>
-    );
-  }
-  if (error) {
-    return (
-      <View style={[styles.banner, { borderColor: COLORS.fire }]}>
-        <Text style={[styles.bannerText, { color: COLORS.fire }]}>
-          {espUrl} unreachable ({error}) — check the phone is on the same WiFi as the ESP32.
-        </Text>
-      </View>
-    );
-  }
-  return null;
-}
-
 export default function Dashboard() {
   useEspSensorFeed(); // live data from the ESP32 polling store
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
-  const isTablet = width >= 768 && width < 1024;
 
   if (isDesktop) {
+    // Row-based grid: two equal flex cells per row → equal-height cards with
+    // aligned edges. Full-width rows follow for log + traces.
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.content}>
         <DashboardHeader />
-        <ConnectionBanner />
+        <GlobalStatusBar />
+        <ConnectionCard />
         <SystemStatusCard />
-        <View style={styles.desktopGrid}>
-          <View style={styles.col}>
-            <GasSensorCard />
-            <FlameSensorCard />
+        <View style={styles.row}>
+          <View style={styles.cell}>
+            <GasSensorCard style={styles.grow} />
           </View>
-          <View style={styles.colWide}>
-            <HeatSensorCard />
-          </View>
-          <View style={styles.col}>
-            <HardwareStatusCard />
-            <ActivityCard maxItems={7} />
+          <View style={styles.cell}>
+            <HeatSensorCard style={styles.grow} />
           </View>
         </View>
+        {/* traces sit high — charts are a primary reading, not an appendix */}
         <SensorAnalyticsCard />
+        <View style={styles.row}>
+          <View style={styles.cell}>
+            <FlameSensorCard style={styles.grow} />
+          </View>
+          <View style={styles.cell}>
+            <HardwareStatusCard style={styles.grow} />
+          </View>
+        </View>
+        <ActivityCard />
       </ScrollView>
     );
   }
 
+  // Mobile / tablet: one column, alarm state first (above the masthead).
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+      <GlobalStatusBar />
       <DashboardHeader />
-      <ConnectionBanner />
+      <ConnectionCard />
       <SystemStatusCard />
       <GasSensorCard />
       <FlameSensorCard />
       <HeatSensorCard />
+      <SensorAnalyticsCard />
       <HardwareStatusCard />
       <ActivityCard />
-      {isTablet ? null : null}
-      <SensorAnalyticsCard />
     </ScrollView>
   );
 }
@@ -96,14 +78,7 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 18, paddingTop: 28, gap: GAP },
-  desktopGrid: { flexDirection: "row", gap: GAP, alignItems: "flex-start" },
-  col: { flex: 1, gap: GAP },
-  colWide: { flex: 1.35, gap: GAP },
-  banner: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  bannerText: { fontSize: 13, fontWeight: "600" },
+  row: { flexDirection: "row", gap: GAP, alignItems: "stretch" },
+  cell: { flex: 1 },
+  grow: { flex: 1 },
 });

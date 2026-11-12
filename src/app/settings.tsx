@@ -10,6 +10,22 @@ import { saveEspUrl, saveEmergencyNumber } from "@/lib/persist";
 import { COLORS, Panel, StatusDot } from "@/components/dashboard/ui";
 import { requestEmergencyPermissions } from "@/lib/permissions";
 
+const TEST_TIMEOUT_MS = 5000;
+
+/** Host name / IP (optionally :port), scheme optional — save() adds it. */
+function isValidAddress(draft: string): boolean {
+  const bare = draft.trim().replace(/^https?:\/\//, "").replace(/\/+.*$/, "");
+  return /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(:\d+)?$/.test(bare) && bare.length > 0;
+}
+
+/** Same normalization the save handler has always used. */
+function normalizeAddress(draft: string): string {
+  const clean = draft.trim().replace(/\/+$/, "");
+  return /^https?:\/\//.test(clean) ? clean : `http://${clean}`;
+}
+
+type TestPhase = "idle" | "testing" | "ok" | "fail";
+
 export default function SettingsScreen() {
   const espUrl = useStore((s) => s.espUrl);
   const status = useStore((s) => s.status);
@@ -21,16 +37,36 @@ export default function SettingsScreen() {
   const [draft, setDraft] = useState(espUrl);
   const [numberDraft, setNumberDraft] = useState(emergencyNumber);
   const [saved, setSaved] = useState(false);
+  const [test, setTest] = useState<{ phase: TestPhase; detail: string }>({ phase: "idle", detail: "" });
+
+  const dirty = normalizeAddress(draft) !== espUrl || numberDraft.trim() !== emergencyNumber;
+  const addressValid = isValidAddress(draft);
 
   const save = async () => {
-    const clean = draft.trim().replace(/\/+$/, "");
-    const withScheme = /^https?:\/\//.test(clean) ? clean : `http://${clean}`;
+    const withScheme = normalizeAddress(draft);
     setEspUrl(withScheme);
     await saveEspUrl(withScheme);
     setEmergencyNumber(numberDraft.trim());
     await saveEmergencyNumber(numberDraft.trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  };
+
+  const testConnection = async () => {
+    const url = normalizeAddress(draft);
+    setTest({ phase: "testing", detail: url });
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+      const res = await fetch(`${url}/api/status`, { cache: "no-store", signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await res.json();
+      setTest({ phase: "ok", detail: "Controller responded" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTest({ phase: "fail", detail: msg === "Aborted" ? "No response within 5s" : msg });
+    }
   };
 
   const linked = !!status;
@@ -50,7 +86,7 @@ export default function SettingsScreen() {
       <Panel title="Controller">
         <Text style={styles.fieldLabel}>ESP32 ADDRESS</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, !addressValid && styles.inputInvalid]}
           value={draft}
           onChangeText={setDraft}
           placeholder="192.168.1.50"
@@ -62,6 +98,16 @@ export default function SettingsScreen() {
         <Text style={styles.hint}>
           Serial command "i" prints the IP. This device must share the board's network — same WiFi, or the SmartFlame-ESP32 hotspot (then http://192.168.4.1).
         </Text>
+
+        <Pressable
+          style={[styles.secondary, test.phase === "testing" && styles.btnBusy]}
+          disabled={!addressValid || test.phase === "testing"}
+          onPress={testConnection}
+        >
+          <Text style={styles.secondaryText}>{test.phase === "testing" ? "TESTING…" : "TEST CONNECTION"}</Text>
+        </Pressable>
+        {test.phase === "ok" ? <Text style={styles.testOk}>✓ {test.detail}</Text> : null}
+        {test.phase === "fail" ? <Text style={styles.testFail}>✕ {test.detail}</Text> : null}
 
         <View style={styles.statusRow}>
           <StatusDot color={linkColor} />
@@ -99,9 +145,16 @@ export default function SettingsScreen() {
       </Panel>
 
       {/* ---- Save ---- */}
-      <Pressable style={[styles.primary, saved && styles.primarySaved]} onPress={save}>
-        <Text style={styles.primaryText}>{saved ? "SAVED ✓" : "SAVE CONFIGURATION"}</Text>
+      <Pressable
+        style={[styles.primary, saved && styles.primarySaved, (!dirty || !addressValid) && styles.primaryDisabled]}
+        disabled={!dirty || !addressValid}
+        onPress={save}
+      >
+        <Text style={[styles.primaryText, (!dirty || !addressValid) && styles.primaryTextDisabled]}>
+          {saved ? "SAVED ✓" : addressValid ? "SAVE CONFIGURATION" : "INVALID ADDRESS"}
+        </Text>
       </Pressable>
+      {!dirty && !saved ? <Text style={styles.footer}>No changes to save yet.</Text> : null}
 
       <Text style={styles.footer}>SmartFlame · fire detection & emergency response</Text>
     </ScrollView>
@@ -133,6 +186,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 15,
   },
+  inputInvalid: { borderColor: COLORS.fire },
+  secondary: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.panelAlt,
+  },
+  secondaryText: { color: COLORS.accent, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
+  btnBusy: { opacity: 0.6 },
+  testOk: { color: COLORS.ok, fontSize: 12, marginTop: 6 },
+  testFail: { color: COLORS.fire, fontSize: 12, marginTop: 6 },
   hint: { color: COLORS.muted, fontSize: 12, marginTop: 8, lineHeight: 17 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.hairline },
   statusText: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
@@ -155,6 +223,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primarySaved: { backgroundColor: COLORS.ok },
+  primaryDisabled: { opacity: 0.4 },
   primaryText: { color: "#111210", fontWeight: "900", letterSpacing: 1.5, fontSize: 13 },
+  primaryTextDisabled: { color: COLORS.muted },
   footer: { color: COLORS.faint, fontSize: 12, textAlign: "center", marginTop: 6 },
 });

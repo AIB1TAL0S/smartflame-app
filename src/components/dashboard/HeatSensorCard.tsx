@@ -3,6 +3,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import {
   useSensorSource,
+  useOffline,
   timeAgo,
   TEMP_WARNING_THRESHOLD,
   TEMP_CRITICAL_THRESHOLD,
@@ -50,26 +51,51 @@ function Track({ pct, color, ticks, min, max, unit }: {
   );
 }
 
-export function HeatSensorCard() {
+export function HeatSensorCard({ style }: { style?: object | null }) {
   const temp = useSensorSource((s) => s.temperatureC);
   const hum = useSensorSource((s) => s.humidity);
-  const dhtValid = useSensorSource((s) => s.hardware.heatSensor);
   const lastUpdate = useSensorSource((s) => s.lastUpdate);
-  const tCls = classifyTemp(temp);
-  const hCls = classifyHum(hum);
+  const offline = useOffline();
+  const dhtValid = useSensorSource((s) => s.hardware.heatSensor);
+
+  // Compact "No data" state — never an empty card; show last-known values.
+  if (!dhtValid) {
+    return (
+      <Panel
+        title="Heat · Humidity (DHT11)"
+        right={<Chip label={offline ? "UNKNOWN" : "NO DATA"} color={COLORS.muted} glyph="✕" />}
+        style={[style, offline ? styles.stale : null]}
+      >
+        <View style={styles.noDataRow}>
+          <Text style={styles.noDataIcon}>⚠</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.noDataTitle}>No data from DHT11</Text>
+            <Text style={styles.noDataSub}>
+              Last known {temp.toFixed(1)}°C · {Math.round(hum)}% RH{offline ? " (stale)" : ""}
+            </Text>
+          </View>
+        </View>
+      </Panel>
+    );
+  }
+
+  const tCls = offline ? { label: "UNKNOWN", color: COLORS.muted } : classifyTemp(temp);
+  const hCls = offline ? { label: "UNKNOWN", color: COLORS.muted } : classifyHum(hum);
   const tempPct = Math.min(100, Math.max(0, (temp / TEMP_MAX) * 100));
 
   return (
     <Panel
       title="Heat · Humidity (DHT11)"
-      right={<Chip label={dhtValid ? "SENSOR OK" : "NO DATA"} color={dhtValid ? COLORS.ok : COLORS.muted} />}
+      right={<Chip label={offline ? "UNKNOWN" : "SENSOR OK"} color={offline ? COLORS.muted : COLORS.ok} />}
+      style={[style, offline ? styles.stale : null]}
     >
-      <View style={{ gap: 16 }}>
+      <View style={{ gap: 10 }}>
+        {/* large primary number (temperature) with compact secondary humidity */}
         <View style={styles.readoutRow}>
-          <Text style={[styles.bigValue, { color: tCls.color }]}>{dhtValid ? temp.toFixed(1) : "--"}</Text>
+          <Text style={[styles.bigValue, { color: tCls.color }]}>{temp.toFixed(1)}</Text>
           <Text style={styles.unit}>°C</Text>
           <View style={{ flex: 1 }} />
-          <Text style={[styles.bigValue, { color: COLORS.text }]}>{dhtValid ? Math.round(hum) : "--"}</Text>
+          <Text style={[styles.humValue, { color: hCls.color }]}>{Math.round(hum)}</Text>
           <Text style={styles.unit}>% RH</Text>
         </View>
 
@@ -85,14 +111,20 @@ export function HeatSensorCard() {
           pct={Math.min(100, Math.max(0, hum))} color={hCls.color} unit="%"
           min="0" max="100"
           ticks={[
-            { at: HUMIDITY_LOW_THRESHOLD, label: `${HUMIDITY_LOW_THRESHOLD} dry` },
-            { at: HUMIDITY_HIGH_THRESHOLD, label: `${HUMIDITY_HIGH_THRESHOLD} wet` },
+            { at: HUMIDITY_LOW_THRESHOLD, label: `${HUMIDITY_LOW_THRESHOLD} dry`, color: COLORS.warn },
+            { at: HUMIDITY_HIGH_THRESHOLD, label: `${HUMIDITY_HIGH_THRESHOLD} wet`, color: COLORS.accent },
           ]}
         />
 
         <View style={styles.foot}>
-          <Text style={styles.hint}>{hCls.label === "DRY · RISK" ? "Low humidity raises ignition risk" : "Comfort band 30–80%"}</Text>
-          <Text style={styles.updated}>{timeAgo(lastUpdate)}</Text>
+          <Text style={styles.hint}>
+            {offline
+              ? "Last known readings — controller unreachable"
+              : hCls.label === "DRY · RISK"
+                ? "▲ Low humidity raises ignition risk"
+                : "Comfort band 30–80%"}
+          </Text>
+          <Text style={styles.updated}>{offline ? "stale" : timeAgo(lastUpdate)}</Text>
         </View>
       </View>
     </Panel>
@@ -100,12 +132,18 @@ export function HeatSensorCard() {
 }
 
 const styles = StyleSheet.create({
+  stale: { opacity: 0.45 },
   readoutRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  bigValue: { fontSize: 34, fontWeight: "800", fontVariant: ["tabular-nums"], letterSpacing: -0.5 },
+  bigValue: { fontSize: 46, fontWeight: "800", fontVariant: ["tabular-nums"], letterSpacing: -1 },
+  humValue: { fontSize: 26, fontWeight: "800", fontVariant: ["tabular-nums"], color: COLORS.text },
   unit: { color: COLORS.muted, fontSize: 13, fontWeight: "600", marginRight: 12 },
+  noDataRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
+  noDataIcon: { fontSize: 26, color: COLORS.warn },
+  noDataTitle: { color: COLORS.text, fontSize: 15, fontWeight: "800" },
+  noDataSub: { color: COLORS.muted, fontSize: 12.5, marginTop: 2, fontVariant: ["tabular-nums"] },
   track: {
-    height: 6,
-    borderRadius: 3,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: COLORS.panelAlt,
     overflow: "hidden",
     position: "relative",
@@ -113,8 +151,8 @@ const styles = StyleSheet.create({
   fill: { height: "100%", borderRadius: 3 },
   tick: { position: "absolute", top: -2, bottom: -2, width: 2, borderRadius: 1 },
   scaleRow: { flexDirection: "row", alignItems: "center" },
-  scale: { color: COLORS.muted, fontSize: 11, fontVariant: ["tabular-nums"] },
-  scaleTick: { color: COLORS.muted, fontSize: 11, fontVariant: ["tabular-nums"] },
+  scale: { color: COLORS.muted, fontSize: 12, fontVariant: ["tabular-nums"] },
+  scaleTick: { color: COLORS.muted, fontSize: 12, fontVariant: ["tabular-nums"] },
   foot: { flexDirection: "row", justifyContent: "space-between" },
   hint: { color: COLORS.muted, fontSize: 12, flex: 1, paddingRight: 8 },
   updated: { color: COLORS.muted, fontSize: 12, fontVariant: ["tabular-nums"] },

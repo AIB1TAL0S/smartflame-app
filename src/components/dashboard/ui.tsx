@@ -6,7 +6,8 @@
  *  status, ember-orange and alarm-red reserved for real trouble.
  */
 
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 export const COLORS = {
@@ -14,8 +15,8 @@ export const COLORS = {
   panel: "#191B18", // panel surface
   panelAlt: "#1F221E",
   text: "#EDEFE8", // warm white
-  muted: "#A8ADA0", // AA on panel (4.8:1)
-  faint: "#7A8073", // decorative only
+  muted: "#A8ADA0", // AA on panel (7.5:1)
+  faint: "#8B9184", // AA on panel (5.3:1) — secondary text may use this
   ok: "#7BD88F", // phosphor green
   warn: "#E8A33D", // ember amber
   fire: "#FF5A44", // alarm red-orange
@@ -35,6 +36,71 @@ export function useIsDesktop(): boolean {
   return width >= 1024;
 }
 
+/**
+ * Ticking wall-clock (ms epoch) that re-renders once per interval.
+ * Returns null until the first tick — callers fall back to the event
+ * timestamp itself for the initial paint (keeps Date.now() out of render).
+ */
+export function useNow(intervalMs = 1000): number | null {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}
+
+/** Compact relative time from an age in ms. */
+function relAge(ageMs: number): string {
+  const s = Math.max(0, Math.round(ageMs / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+/**
+ * Relative timestamp ("10m ago") that turns amber past the expected update
+ * interval and red when data is badly stale. Hover (web) or long-press
+ * (mobile) reveals the absolute wall-clock time.
+ */
+export function TimeAgo({
+  ts,
+  warnMs = 5000,
+  alertMs = 15000,
+  prefix = "",
+  style,
+}: {
+  ts: number;
+  /** older than this → amber */
+  warnMs?: number;
+  /** older than this → red */
+  alertMs?: number;
+  prefix?: string;
+  style?: object;
+}) {
+  const now = useNow(1000);
+  const [showAbsolute, setShowAbsolute] = useState(false);
+  if (now === null) return null;
+  // Before the first tick the age is unknown — treat as just-updated.
+  const age = Math.max(0, now - ts);
+  const color = age >= alertMs ? COLORS.fire : age >= warnMs ? COLORS.warn : COLORS.muted;
+  const label = showAbsolute
+    ? new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : prefix + relAge(age);
+  return (
+    <Pressable
+      hitSlop={6}
+      onHoverIn={() => setShowAbsolute(true)}
+      onHoverOut={() => setShowAbsolute(false)}
+      onLongPress={() => setShowAbsolute((v) => !v)}
+      accessibilityLabel={`Last updated ${label}`}
+    >
+      <Text style={[styles.timeAgo, style, { color }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** Section header: engraved label style, no card box. */
 export function Panel({
   title,
@@ -45,7 +111,7 @@ export function Panel({
   title?: string;
   right?: ReactNode;
   children: ReactNode;
-  style?: object;
+  style?: object | null;
 }) {
   return (
     <View style={[styles.panel, style]}>
@@ -79,11 +145,35 @@ export function StatusDot({ color, size = 8, pulse = false }: { color: string; s
   );
 }
 
-/** Inline status label — small caps, letter-spaced, colored text only. */
-export function Chip({ label, color }: { label: string; color: string }) {
+/**
+ * Severity glyphs — every status pairs a distinct shape with its color so
+ * state is readable for color-blind users: ✓ ok · ▲ warning · ■ critical ·
+ * ✕ unknown/offline · ◆ neutral highlight.
+ */
+export const GLYPH: { ok: string; warn: string; fire: string; unknown: string; accent: string } = {
+  ok: "✓",
+  warn: "▲",
+  fire: "■",
+  unknown: "✕",
+  accent: "◆",
+};
+
+const GLYPH_BY_COLOR: Record<string, string> = {
+  [COLORS.ok]: GLYPH.ok,
+  [COLORS.warn]: GLYPH.warn,
+  [COLORS.fire]: GLYPH.fire,
+  [COLORS.muted]: GLYPH.unknown,
+  [COLORS.accent]: GLYPH.accent,
+};
+
+/** Inline status label — glyph + small caps, letter-spaced, colored text. */
+export function Chip({ label, color, glyph }: { label: string; color: string; glyph?: string }) {
+  const g = glyph ?? GLYPH_BY_COLOR[color] ?? "•";
   return (
     <View style={[styles.chip, { backgroundColor: color + "1F" }]}>
-      <Text style={[styles.chipText, { color }]}>{label}</Text>
+      <Text style={[styles.chipText, { color }]}>
+        {g} {label}
+      </Text>
     </View>
   );
 }
@@ -146,4 +236,5 @@ const styles = StyleSheet.create({
   },
   rowLabel: { color: COLORS.muted, fontSize: 13 },
   rowValue: { fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  timeAgo: { fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] },
 });
