@@ -1,5 +1,5 @@
-/** Hardware status: LED/buzzer shown as inert states, not errors.
- *  LED ON and buzzer sounding are *expected* during an alert — the row
+/** Hardware status: buzzer shown as inert state, not an error.
+ *  Buzzer sounding is *expected* during an alert — the row
  *  reads neutral, not red. Only disconnected sensors are failures. */
 
 import { StyleSheet, Text, View } from "react-native";
@@ -27,7 +27,6 @@ export function HardwareStatusCard() {
         <Item label="Flame · IR" ok={hardware.flameSensor} value={hardware.flameSensor ? "LINKED" : "OFFLINE"} />
         <Item label="Gas · MQ-2" ok={hardware.mq2Sensor} value={hardware.mq2Sensor ? "LINKED" : "OFFLINE"} />
         <Item label="Heat · DHT11" ok={hardware.heatSensor} value={hardware.heatSensor ? "LINKED" : "OFFLINE"} />
-        <Item label="Indicator LED" ok neutral value={hardware.led ? "ON" : "OFF"} />
         <Item label="Buzzer" ok neutral value={hardware.buzzer ? "SOUNDING" : "IDLE"} />
       </View>
     </Panel>

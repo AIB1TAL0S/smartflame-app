@@ -32,7 +32,6 @@ export type HardwareState = {
   flameSensor: boolean;
   mq2Sensor: boolean;
   heatSensor: boolean;
-  led: boolean;
   buzzer: boolean;
 };
 
@@ -91,7 +90,6 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
     flameSensor: false,
     mq2Sensor: false,
     heatSensor: false,
-    led: false,
     buzzer: false,
   },
   activity: [
@@ -134,13 +132,12 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
     }
 
     const buzzer = alert === "CRITICAL";
-    const led = alert !== "SAFE";
 
     set({
       ...partial,
       alert,
       lastUpdate: now,
-      hardware: { ...prev.hardware, ...(partial.hardware ?? {}), buzzer, led },
+      hardware: { ...prev.hardware, ...(partial.hardware ?? {}), buzzer },
       activity: activity.slice(0, 30),
       gasHistory: [...prev.gasHistory, { t: now, v: gas }].slice(-HISTORY_LIMIT),
       tempHistory: [...prev.tempHistory, { t: now, v: temp }].slice(-HISTORY_LIMIT),
@@ -156,7 +153,6 @@ export const useSensorSource = create<SensorStore>((set, get) => ({
         flameSensor: false,
         mq2Sensor: false,
         heatSensor: false,
-        led: false,
         buzzer: false,
       },
     });
@@ -214,7 +210,6 @@ export function useEspSensorFeed(): void {
           // DHT11 read failures are transient (~1% by design); latch the
           // last known health instead of flashing red per failed read
           heatSensor: st.dhtValid || prev.hardware.heatSensor,
-          led: st.alert !== "NORMAL",
           buzzer: st.alert === "EMERGENCY",
         },
       });
