@@ -3,7 +3,7 @@ import { useStore } from "./store";
 import { parseStatus } from "./types";
 
 const POLL_MS = 1000; // HTTP fallback poll
-const MAX_BACKOFF = 5; // ×POLL_MS = 5s worst case, stays under STALE_MS (6s) so a lossy WiFi never flaps OFFLINE
+const MAX_BACKOFF = 12; // ×POLL_MS; pairs with STALE_MS 15000 so lossy WiFi never flaps OFFLINE
 const WS_PORT = 81; // firmware WebSocketsServer port
 const WS_RETRY_MS = 3000;
 const WS_MAX_FAILS = 3; // after this many failed attempts, stop retrying — polling is enough
@@ -47,6 +47,17 @@ export function useEspPoll() {
     let ws: WebSocket | null = null;
     let wsTimer: ReturnType<typeof setTimeout> | null = null;
     let socketOk = false;
+
+    // Browsers throttle setInterval + suspend fetches in hidden tabs, which
+    // makes lastUpdate go stale and the dashboard flap OFFLINE. Poll once
+    // immediately on refocus so the tab shows live data the instant the
+    // user returns, instead of waiting for the next tick.
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && alive) {
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     const connectSocket = () => {
       if (!alive || wsDisabled.current || socketOk) return;
@@ -130,6 +141,7 @@ export function useEspPoll() {
       clearTimeout(timer);
       if (wsTimer) clearTimeout(wsTimer);
       ws?.close();
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [espUrl, setStatus, setError]);
 }

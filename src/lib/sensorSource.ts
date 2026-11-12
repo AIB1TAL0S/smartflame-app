@@ -178,8 +178,12 @@ const DEVICE_ALERT_MAP: Record<DeviceAlertLevel, AlertLevel> = {
   UNKNOWN: "OFFLINE",
 };
 
-/** No valid snapshot for this long ⇒ device considered offline. */
-const STALE_MS = 6000; // tolerate 2-3 dropped polls over lossy WiFi before flagging offline
+/** No valid snapshot for this long ⇒ device considered offline.
+ *  The board's WiFi link drops ~28% of polls (measured); stretches of 8+
+ *  consecutive failures are common, so the window must cover them. */
+const STALE_MS = 15000;
+/** Show "stale data" hint when nothing new arrives for this long. */
+const STALE_HINT_MS = 8000;
 const WATCHDOG_TICK_MS = 1000;
 
 export function useEspSensorFeed(): void {
@@ -196,17 +200,20 @@ export function useEspSensorFeed(): void {
       // We are receiving data, so controller + flame/MQ-2 sensors are linked.
       // Heat sensor health comes from the DHT validity flag; LED/buzzer are
       // inferred from the device alert level (phase 2: expose real GPIO states).
-      useSensorSource.getState().pushSnapshot({
+      const prev = useSensorSource.getState();
+      prev.pushSnapshot({
         gasPercent: st.gasPercent,
-        temperatureC: st.dhtValid ? st.temperatureC : 0,
-        humidity: st.dhtValid ? st.humidity : 0,
+        temperatureC: st.dhtValid ? st.temperatureC : prev.temperatureC,
+        humidity: st.dhtValid ? st.humidity : prev.humidity,
         flame: st.flame,
         alert: DEVICE_ALERT_MAP[st.alert] ?? "OFFLINE",
         hardware: {
           controller: true,
           flameSensor: true,
           mq2Sensor: true,
-          heatSensor: st.dhtValid,
+          // DHT11 read failures are transient (~1% by design); latch the
+          // last known health instead of flashing red per failed read
+          heatSensor: st.dhtValid || prev.hardware.heatSensor,
           led: st.alert !== "NORMAL",
           buzzer: st.alert === "EMERGENCY",
         },
