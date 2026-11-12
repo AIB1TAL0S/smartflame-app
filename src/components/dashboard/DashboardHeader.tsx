@@ -91,10 +91,10 @@ const styles = StyleSheet.create({
   markFlame: { color: COLORS.accent, fontSize: 18, fontWeight: "900", fontStyle: "italic" },
   markTongue: { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   logo: { color: COLORS.text, fontSize: 18, fontWeight: "800", letterSpacing: 3 },
-  sub: { color: COLORS.muted, fontSize: 11.5, letterSpacing: 0.4 },
+  sub: { color: COLORS.muted, fontSize: 12, letterSpacing: 0.4 },
   right: { flexDirection: "row", alignItems: "center", gap: 14 },
   clock: { color: COLORS.text, fontSize: 20, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  date: { color: COLORS.muted, fontSize: 11.5, letterSpacing: 0.5, textTransform: "uppercase", marginTop: 2 },
+  date: { color: COLORS.muted, fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", marginTop: 2 },
   gearBtn: { paddingHorizontal: 6, paddingVertical: 4 },
   gear: { color: COLORS.muted, fontSize: 20 },
   linkPill: {
@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  linkText: { fontSize: 11.5, fontWeight: "800", letterSpacing: 1.2 },
+  linkText: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
 });
