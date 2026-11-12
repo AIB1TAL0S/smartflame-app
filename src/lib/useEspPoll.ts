@@ -6,6 +6,7 @@ const POLL_MS = 1000; // HTTP fallback poll
 const MAX_BACKOFF = 5; // ×POLL_MS = 5s worst case, stays under STALE_MS (6s) so a lossy WiFi never flaps OFFLINE
 const WS_PORT = 81; // firmware WebSocketsServer port
 const WS_RETRY_MS = 3000;
+const WS_MAX_FAILS = 3; // after this many failed attempts, stop retrying — polling is enough
 
 function toWsUrl(espUrl: string): string | null {
   try {
@@ -24,15 +25,20 @@ function toWsUrl(espUrl: string): string | null {
  * status JSON as /api/status every 250 ms, so updates land instantly.
  *
  * Fallback path: whenever the socket is not open (older firmware, blocked
- * port, connecting…), the hook polls GET /api/status every second with the
- * original exponential backoff. The two paths share one tick loop, so
- * switching between them is seamless and needs no state in the UI.
+ * port, connecting…), the hook polls GET /api/status every second.
+ *
+ * If the WS endpoint fails repeatedly (firmware without WebSocket support,
+ * blocked port), retries stop permanently for this session and polling
+ * carries the feed — this is what keeps the dashboard from flapping
+ * offline/online when only polling is available.
  */
 export function useEspPoll() {
   const espUrl = useStore((s) => s.espUrl);
   const setStatus = useStore((s) => s.setStatus);
   const setError = useStore((s) => s.setError);
   const backoff = useRef(1);
+  const wsFails = useRef(0);
+  const wsDisabled = useRef(false);
 
   useEffect(() => {
     if (!espUrl) return;
@@ -42,11 +48,10 @@ export function useEspPoll() {
     let wsTimer: ReturnType<typeof setTimeout> | null = null;
     let socketOk = false;
 
-    const clearError = () => setError(null);
-
     const connectSocket = () => {
+      if (!alive || wsDisabled.current || socketOk) return;
       const wsUrl = toWsUrl(espUrl);
-      if (!wsUrl || !alive) return;
+      if (!wsUrl) return;
       try {
         ws = new WebSocket(wsUrl);
       } catch {
@@ -59,8 +64,9 @@ export function useEspPoll() {
           return;
         }
         socketOk = true;
+        wsFails.current = 0;
         backoff.current = 1;
-        clearError();
+        setError(null);
       };
       ws.onmessage = (ev) => {
         if (!alive || !socketOk || typeof ev.data !== "string") return;
@@ -70,13 +76,19 @@ export function useEspPoll() {
           // ignore malformed frames; next push will resync
         }
       };
-      ws.onerror = () => {
-        // onclose fires after this; nothing to do here
-      };
       ws.onclose = () => {
         ws = null;
         if (!alive) return;
+        const wasOk = socketOk;
         socketOk = false;
+        // never connected successfully → count the failure
+        if (!wasOk) {
+          wsFails.current += 1;
+          if (wsFails.current >= WS_MAX_FAILS) {
+            wsDisabled.current = true; // polling-only from here on
+            return;
+          }
+        }
         wsTimer = setTimeout(connectSocket, WS_RETRY_MS);
       };
     };
