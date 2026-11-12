@@ -1,10 +1,8 @@
 ﻿/**
- * SmartFlame main dashboard.
+ * SmartFlame main dashboard — instrument panel layout.
  *
- * Mobile: single-column, status first, compact cards.
- * Desktop (>=1024px): multi-column professional grid.
- *
- * All sensor data comes from the centralized `useSensorSource` store.
+ * Desktop (>=1024px): [ verdict strip | sensor dials | log + traces ]
+ * Mobile: single column, verdict first.
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -17,12 +15,11 @@ import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
 import { GasSensorCard } from "@/components/dashboard/GasSensorCard";
 import { FlameSensorCard } from "@/components/dashboard/FlameSensorCard";
 import { HeatSensorCard } from "@/components/dashboard/HeatSensorCard";
-import { HumiditySensorCard } from "@/components/dashboard/HumiditySensorCard";
 import { HardwareStatusCard } from "@/components/dashboard/HardwareStatusCard";
 import { ActivityCard } from "@/components/dashboard/ActivityCard";
 import { SensorAnalyticsCard } from "@/components/dashboard/SensorAnalyticsCard";
 
-const GAP = 14;
+const GAP = 12;
 
 /** Shown while no ESP32 address is configured or the device is unreachable. */
 function ConnectionBanner() {
@@ -33,7 +30,7 @@ function ConnectionBanner() {
     return (
       <Pressable style={[styles.banner, { borderColor: COLORS.warn }]} onPress={() => router.push("/settings")}>
         <Text style={[styles.bannerText, { color: COLORS.warn }]}>
-          ⚠ No ESP32 address configured — tap to add it in Settings (serial command "i" prints it).
+          No controller address configured — tap to add it in Settings (serial command "i" prints it).
         </Text>
       </Pressable>
     );
@@ -42,7 +39,7 @@ function ConnectionBanner() {
     return (
       <View style={[styles.banner, { borderColor: COLORS.fire }]}>
         <Text style={[styles.bannerText, { color: COLORS.fire }]}>
-          ⚠ {espUrl} unreachable ({error}) — check the phone is on the same WiFi as the ESP32.
+          {espUrl} unreachable ({error}) — check the phone is on the same WiFi as the ESP32.
         </Text>
       </View>
     );
@@ -56,31 +53,26 @@ export default function Dashboard() {
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
 
-  const sensorCards = (
-    <>
-      <GasSensorCard />
-      <FlameSensorCard />
-      <HeatSensorCard />
-      <HumiditySensorCard />
-    </>
-  );
-
   if (isDesktop) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.content}>
         <DashboardHeader />
         <ConnectionBanner />
+        <SystemStatusCard />
         <View style={styles.desktopGrid}>
           <View style={styles.col}>
-            <SystemStatusCard />
-            <HardwareStatusCard />
+            <GasSensorCard />
+            <FlameSensorCard />
           </View>
-          <View style={styles.colWide}>{sensorCards}</View>
+          <View style={styles.colWide}>
+            <HeatSensorCard />
+          </View>
           <View style={styles.col}>
-            <ActivityCard maxItems={8} />
-            <SensorAnalyticsCard />
+            <HardwareStatusCard />
+            <ActivityCard maxItems={7} />
           </View>
         </View>
+        <SensorAnalyticsCard />
       </ScrollView>
     );
   }
@@ -90,27 +82,28 @@ export default function Dashboard() {
       <DashboardHeader />
       <ConnectionBanner />
       <SystemStatusCard />
-      {isTablet ? <View style={styles.tabletRow}>{sensorCards}</View> : <View style={styles.stack}>{sensorCards}</View>}
+      <GasSensorCard />
+      <FlameSensorCard />
+      <HeatSensorCard />
       <HardwareStatusCard />
       <ActivityCard />
+      {isTablet ? null : null}
       <SensorAnalyticsCard />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B0F14" },
-  content: { padding: 16, paddingTop: 60, gap: GAP },
-  stack: { gap: GAP },
-  tabletRow: { flexDirection: "row", gap: GAP },
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  content: { padding: 18, paddingTop: 28, gap: GAP },
   desktopGrid: { flexDirection: "row", gap: GAP, alignItems: "flex-start" },
   col: { flex: 1, gap: GAP },
-  colWide: { flex: 1.2, gap: GAP },
+  colWide: { flex: 1.35, gap: GAP },
   banner: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#141A22",
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  bannerText: { fontSize: 13, fontWeight: "600", lineHeight: 18 },
+  bannerText: { fontSize: 13, fontWeight: "600" },
 });

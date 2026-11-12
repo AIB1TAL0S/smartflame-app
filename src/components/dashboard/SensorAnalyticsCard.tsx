@@ -1,15 +1,19 @@
-/** Sensor analytics: gas & temperature readings over time (SVG line charts). */
+/** Sensor analytics: strip-chart style traces with threshold reference lines. */
 
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Polyline } from "react-native-svg";
-import { useSensorSource, Sample } from "@/lib/sensorSource";
-import { COLORS, Card, Chip } from "./ui";
+import Svg, { Polyline, Line, Rect } from "react-native-svg";
+import { useSensorSource, Sample, GAS_WARNING_THRESHOLD, TEMP_WARNING_THRESHOLD } from "@/lib/sensorSource";
+import { COLORS, Panel } from "./ui";
 
 const W = 300;
-const H = 120;
+const H = 110;
+const GAS_MAX = 80;
+const TEMP_MAX = 80;
 
-function Sparkline({ data, color, min, max }: { data: Sample[]; color: string; min: number; max: number }) {
+function Trace({ data, color, min, max, thresholds }: {
+  data: Sample[]; color: string; min: number; max: number; thresholds: { at: number; color: string; label: string }[];
+}) {
   const pts = data
     .map((s, i) => {
       const x = (i / Math.max(1, data.length - 1)) * W;
@@ -18,9 +22,21 @@ function Sparkline({ data, color, min, max }: { data: Sample[]; color: string; m
     })
     .join(" ");
   return (
-    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <Polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-    </Svg>
+    <View style={styles.chartBox}>
+      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {/* threshold bands */}
+        {thresholds.map((t) => {
+          const y = H - ((t.at - min) / (max - min)) * H;
+          return (
+            <View key={t.label}>
+              <Rect x={0} y={y} width={W} height={H - y} fill={t.color} opacity={0.06} />
+              <Line x1={0} y1={y} x2={W} y2={y} stroke={t.color} strokeWidth={1} strokeDasharray="4 4" opacity={0.5} />
+            </View>
+          );
+        })}
+        <Polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      </Svg>
+    </View>
   );
 }
 
@@ -33,7 +49,7 @@ function TimeRange({ value, onChange }: { value: number; onChange: (v: number) =
           onPress={() => onChange(m)}
           style={[styles.rangeBtn, value === m && styles.rangeBtnActive]}
         >
-          <Text style={[styles.rangeText, value === m && styles.rangeTextActive]}>{m}m</Text>
+          <Text style={[styles.rangeText, value === m && styles.rangeTextActive]}>{m} min</Text>
         </Pressable>
       ))}
     </View>
@@ -52,66 +68,60 @@ export function SensorAnalyticsCard() {
   const tempWin = tempHistory.filter((s) => s.t >= cutoff);
 
   return (
-    <Card title="Sensor Analytics">
-      <TimeRange value={rangeMin} onChange={setRangeMin} />
-
+    <Panel title="Traces" right={<TimeRange value={rangeMin} onChange={setRangeMin} />}>
       <View style={styles.section}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Gas readings over time</Text>
-          <Chip label={`${gas.toFixed(1)}%`} color={COLORS.accent} />
+          <Text style={styles.chartTitle}>Gas %</Text>
+          <Text style={[styles.now, { color: COLORS.accent }]}>{gas.toFixed(1)}%</Text>
         </View>
-        <View style={styles.chartBox}>
-          {gasWin.length > 1 ? (
-            <Sparkline data={gasWin} color={COLORS.accent} min={0} max={80} />
-          ) : (
-            <Text style={styles.empty}>Collecting data…</Text>
-          )}
+        <Trace
+          data={gasWin} color={COLORS.accent} min={0} max={GAS_MAX}
+          thresholds={[{ at: GAS_WARNING_THRESHOLD, color: COLORS.warn, label: "warn" }]}
+        />
+        <View style={styles.axisRow}>
+          <Text style={styles.axis}>0</Text>
+          <Text style={[styles.axis, { color: COLORS.warn }]}>warn {GAS_WARNING_THRESHOLD}</Text>
+          <Text style={styles.axis}>{GAS_MAX}%</Text>
         </View>
-        <Text style={styles.axis}>0% ····· 80% (last {rangeMin} min)</Text>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionGap]}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Temperature readings over time</Text>
-          <Chip label={`${temp.toFixed(1)}°C`} color={COLORS.warn} />
+          <Text style={styles.chartTitle}>Temperature °C</Text>
+          <Text style={[styles.now, { color: COLORS.warn }]}>{temp.toFixed(1)}°C</Text>
         </View>
-        <View style={styles.chartBox}>
-          {tempWin.length > 1 ? (
-            <Sparkline data={tempWin} color={COLORS.warn} min={0} max={80} />
-          ) : (
-            <Text style={styles.empty}>Collecting data…</Text>
-          )}
+        <Trace
+          data={tempWin} color={COLORS.warn} min={0} max={TEMP_MAX}
+          thresholds={[{ at: TEMP_WARNING_THRESHOLD, color: COLORS.warn, label: "warn" }]}
+        />
+        <View style={styles.axisRow}>
+          <Text style={styles.axis}>0</Text>
+          <Text style={[styles.axis, { color: COLORS.warn }]}>warn {TEMP_WARNING_THRESHOLD}</Text>
+          <Text style={styles.axis}>{TEMP_MAX}°C</Text>
         </View>
-        <Text style={styles.axis}>0°C ····· 80°C (last {rangeMin} min)</Text>
       </View>
-    </Card>
+    </Panel>
   );
 }
 
 const styles = StyleSheet.create({
-  rangeRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
-  rangeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.cardAlt,
-  },
-  rangeBtnActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent + "22" },
+  rangeRow: { flexDirection: "row", gap: 4 },
+  rangeBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: COLORS.border },
+  rangeBtnActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent + "1F" },
   rangeText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
   rangeTextActive: { color: COLORS.accent },
-  section: { marginTop: 4 },
-  chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  chartTitle: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
+  section: { gap: 6 },
+  sectionGap: { marginTop: 18 },
+  chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  chartTitle: { color: COLORS.muted, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1 },
+  now: { fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] },
   chartBox: {
-    backgroundColor: COLORS.cardAlt,
-    borderRadius: 10,
-    marginTop: 8,
+    backgroundColor: COLORS.panelAlt,
+    borderRadius: 6,
     paddingVertical: 6,
-    height: H + 12,
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.hairline,
   },
-  empty: { color: COLORS.faint, fontSize: 12, textAlign: "center" },
-  axis: { color: COLORS.faint, fontSize: 10, marginTop: 4, textAlign: "center" },
+  axisRow: { flexDirection: "row", justifyContent: "space-between" },
+  axis: { color: COLORS.muted, fontSize: 11, fontVariant: ["tabular-nums"] },
 });
