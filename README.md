@@ -22,7 +22,7 @@ ESP32 ── WiFi router (or its own AP hotspot) ── phone running Expo Go
 `GET /api/status` →
 ```json
 {"mq2Raw":412,"gasPercent":0,"temperatureC":28,"humidity":55,"dhtValid":true,
- "flame":false,"alert":"NORMAL","routerConnected":true,"wifiMode":"ROUTER"}
+ "flame":false,"buzzer":false,"alert":"NORMAL","routerConnected":true,"wifiMode":"ROUTER"}
 ```
 
 ## Run the app
