@@ -18,6 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CALL_PHONE",
         "android.permission.POST_NOTIFICATIONS",
@@ -39,7 +40,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Stores your SmartFlame device settings securely."
+        }
+      ],
+      "./plugins/withCleartextTraffic.js"
     ],
     "experiments": {
       "typedRoutes": true,
