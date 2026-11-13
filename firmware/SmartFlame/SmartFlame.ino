@@ -286,14 +286,6 @@ sensorData.temperatureC >= TEMP_WARNING_C
 level = ALERT_WARNING;
 }
 if (sensorData.flame) {
-if (level < ALERT_WARNING)
-level = ALERT_WARNING;
-bool gasHigh =
-sensorData.gasPercent >= GAS_WARNING_PCT;
-bool temperatureHigh =
-temperatureValid &&
-sensorData.temperatureC >= TEMP_WARNING_C;
-if (gasHigh || temperatureHigh)
 level = ALERT_EMERGENCY;
 }
 if (alarmTestActive())
