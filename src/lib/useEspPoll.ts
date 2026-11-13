@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { useStore } from "./store";
 import { parseStatus } from "./types";
 
@@ -56,13 +57,16 @@ export function useEspPoll() {
     // Browsers throttle setInterval + suspend fetches in hidden tabs, which
     // makes lastUpdate go stale and the dashboard flap OFFLINE. Poll once
     // immediately on refocus so the tab shows live data the instant the
-    // user returns, instead of waiting for the next tick.
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && alive) {
-        tick();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
+    // user returns. WEB ONLY — `document` does not exist on native.
+    let onVisible: (() => void) | null = null;
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      onVisible = () => {
+        if (document.visibilityState === "visible" && alive) {
+          tick();
+        }
+      };
+      document.addEventListener("visibilitychange", onVisible);
+    }
 
     const connectSocket = () => {
       if (!alive || wsDisabled.current || socketOk) return;
@@ -146,7 +150,9 @@ export function useEspPoll() {
       clearTimeout(timer);
       if (wsTimer) clearTimeout(wsTimer);
       ws?.close();
-      document.removeEventListener("visibilitychange", onVisible);
+      if (onVisible && typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisible);
+      }
     };
-  }, [espUrl, setStatus, setError, retryNonce]);
+  }, [espUrl, setStatus, setError]);
 }
