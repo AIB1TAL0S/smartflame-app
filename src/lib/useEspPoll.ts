@@ -154,5 +154,5 @@ export function useEspPoll() {
         document.removeEventListener("visibilitychange", onVisible);
       }
     };
-  }, [espUrl, setStatus, setError]);
+  }, [espUrl, retryNonce, setStatus, setError]);
 }
